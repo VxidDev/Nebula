@@ -1,9 +1,11 @@
-from nebula import HttpServer
+from nebula import Nebula
+from pathlib import Path 
 
-app = HttpServer("localhost", 8000)
+app = Nebula("localhost", 8000)
+app.templates_dir = Path(__file__).resolve().parent / "templates"
 
 @app.route("/")
 def main():
-    return "Root!", 200
+    return app.load_template("test.html"), 200
 
 app.run()

@@ -2,12 +2,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .utils.route import Route
 from typing import Dict
 
-class HttpServer:
+class TemplateNotFound(BaseException):
+    pass
+
+class Nebula:
     def __init__(self, host: str , port: int):
         self.host = host 
         self.port = port 
 
         self.routes: Dict[str] = {}
+        self.templates_dir = "./templates"
 
         self.NOT_FOUND = """
             <head><title>404 Not Found</title></head>
@@ -54,3 +58,15 @@ class HttpServer:
             self.routes[path] = func
             return func
         return decorator
+
+    def load_template(self, filename: str) -> str:
+        """
+        Open and read file from ./templates/<filepath>
+        """
+        
+        try:
+            with open(f"{self.templates_dir}/{filename}", "r") as file:
+                content = file.read()
+            return content
+        except FileNotFoundError:
+            raise TemplateNotFound(f"File: '{filename}' not found in {self.templates_dir} directory.")
