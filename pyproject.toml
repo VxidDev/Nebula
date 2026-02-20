@@ -1,0 +1,14 @@
+[project]
+name = "nebula"
+version = "0.1.0"
+description = "Nebula: Lightweight Python HTTP server with decorator-based routing."
+
+#[project.dependencies]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nebula*"]
+
+[build-system]
+requires = ["setuptools>=65.5.1", "wheel"]
+build-backend = "setuptools.build_meta"
