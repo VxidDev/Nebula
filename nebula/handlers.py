@@ -13,15 +13,27 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = Route(self.path)
-        requested_route = self.server_instance.routes.get(route.path, None)
+        statics_route = str(self.server_instance.statics_dir).rsplit('/', 1)[1]
+        is_requesting_statics = route.path.split('/' , 2)[1] == statics_route 
 
-        if not requested_route:
+        if is_requesting_statics:
+            try:
+                result = self.server_instance._statics_handler(route)
+                self.handle_response(result)
+                return
+            except Exception as e:
+                self.internal_error(e)
+                return
+
+        requestedRoute = self.server_instance.routes.get(route.path, None)
+
+        if not requestedRoute:
             self.send_response(404)
             self.end_headers()
-            self.wfile.write(self.server_instance.NOT_FOUND.encode())
+            self.wfile.write(f"{self.server_instance.NOT_FOUND}".encode())
             return
 
-        if "GET" not in requested_route["methods"]:
+        if "GET" not in requestedRoute["methods"]:
             self.method_not_allowed()
             return
 
@@ -30,8 +42,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         try:
             if self.server_instance.exec_before_request:
                 self.server_instance.exec_before_request(self.server_instance.request)
-
-            result: Response = requested_route["function"]()
+                    
+            result: Response = requestedRoute["function"]()
 
             self.send_response(result.http_code)
 
@@ -51,15 +63,15 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         route = Route(self.path)
-        requested_route = self.server_instance.routes.get(route.path, None)
+        requestedRoute = self.server_instance.routes.get(route.path, None)
 
-        if not requested_route:
+        if not requestedRoute:
             self.send_response(404)
             self.end_headers()
-            self.wfile.write(self.server_instance.NOT_FOUND.encode())
+            self.wfile.write(f"{self.server_instance.NOT_FOUND}".encode())
             return
 
-        if "POST" not in requested_route["methods"]:
+        if "POST" not in requestedRoute["methods"]:
             self.method_not_allowed()
             return
 
@@ -71,8 +83,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         try:
             if self.server_instance.exec_before_request:
                 self.server_instance.exec_before_request(self.server_instance.request)
-
-            result: Response = requested_route["function"]()
+                    
+            result: Response = requestedRoute["function"]()
 
             self.send_response(result.http_code)
 
@@ -92,8 +104,17 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def handle_response(self, response: Response) -> None:
         self.send_response(response.http_code)
+
+        for key, value in response.headers.items():
+            self.send_header(key, value)
+
         self.end_headers()
-        self.wfile.write(response.body.encode())
+
+        if isinstance(response.body, str): 
+            self.wfile.write(response.body.encode())
+        else:
+            self.wfile.write(response.body)
+
         return
 
     def internal_error(self, exception: Exception) -> None:

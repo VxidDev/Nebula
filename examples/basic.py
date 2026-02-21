@@ -1,8 +1,9 @@
 from nebula import Nebula , Response , jsonify
 from pathlib import Path 
 
-app = Nebula("localhost", 8000, True)
+app = Nebula("localhost", 8000, False)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
+app.statics_dir = Path(__file__).resolve().parent / "statics"
 
 @app.before_request
 def func(request):

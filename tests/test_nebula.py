@@ -17,16 +17,22 @@ class TestNebulaInit:
         assert app.routes == {}
         assert app.templates_dir == "./templates"
 
+        app.stop()
+
     def test_nebula_init_debug(self):
         """Tests Nebula initialization with debug mode."""
         app = Nebula("localhost", 8000, debug=True)
         assert app.debug is True
+
+        app.stop()
 
     def test_nebula_init_custom_host_port(self):
         """Tests Nebula initialization with custom host and port."""
         app = Nebula("127.0.0.1", 5000)
         assert app.host == "127.0.0.1"
         assert app.port == 5000
+
+        app.stop()
 
 
 class TestNebulaRoute:
@@ -44,6 +50,8 @@ class TestNebulaRoute:
         assert app.routes["/test"]["function"] == test_handler
         assert "GET" in app.routes["/test"]["methods"]
 
+        app.stop()
+
     def test_route_decorator_post(self):
         """Tests route decorator with POST method."""
         app = Nebula("localhost", 8000)
@@ -54,6 +62,8 @@ class TestNebulaRoute:
 
         assert "/api/data" in app.routes
         assert "POST" in app.routes["/api/data"]["methods"]
+
+        app.stop()
 
     def test_route_decorator_multiple_methods(self):
         """Tests route decorator with multiple methods."""
@@ -67,6 +77,8 @@ class TestNebulaRoute:
         assert "GET" in app.routes["/api/resource"]["methods"]
         assert "POST" in app.routes["/api/resource"]["methods"]
 
+        app.stop()
+
     def test_route_decorator_invalid_method(self):
         """Tests route decorator raises error for invalid method."""
         app = Nebula("localhost", 8000)
@@ -76,6 +88,8 @@ class TestNebulaRoute:
             @app.route("/test", methods=["INVALID"])
             def test_handler():
                 return Response("OK", 200)
+
+        app.stop()
 
     def test_route_decorator_multiple_routes(self):
         """Tests multiple routes on same app."""
@@ -92,6 +106,8 @@ class TestNebulaRoute:
         assert len(app.routes) == 2
         assert "/route1" in app.routes
         assert "/route2" in app.routes
+
+        app.stop()
 
 
 class TestNebulaTemplates:
@@ -118,6 +134,8 @@ class TestNebulaTemplates:
         content = app.load_template("test.html")
         assert content == "<h1>Hello</h1>"
 
+        app.stop()
+
     def test_load_template_not_found(self):
         """Tests template not found exception."""
         app = Nebula("localhost", 8000)
@@ -125,6 +143,8 @@ class TestNebulaTemplates:
 
         with pytest.raises(TemplateNotFound):
             app.load_template("nonexistent.html")
+
+        app.stop()
 
     def test_load_template_nested_path(self):
         """Tests loading template from nested directory."""
@@ -139,6 +159,8 @@ class TestNebulaTemplates:
 
         content = app.load_template("pages/home.html")
         assert "<h1>Home</h1>" in content
+
+        app.stop()
 
 
 class TestNebulaHooks:
@@ -155,6 +177,8 @@ class TestNebulaHooks:
 
         assert app.exec_before_request is not None
 
+        app.stop()
+
     def test_after_request(self):
         """Tests after_request hook."""
         app = Nebula("localhost", 8000)
@@ -166,6 +190,8 @@ class TestNebulaHooks:
 
         assert app.exec_after_request is not None
 
+        app.stop()
+
     def test_internal_error_handler(self):
         """Tests internal_error_handler."""
         app = Nebula("localhost", 8000)
@@ -176,6 +202,8 @@ class TestNebulaHooks:
 
         assert app.exec_on_internal_error is not None
 
+        app.stop()
+
     def test_method_not_allowed_handler(self):
         """Tests method_not_allowed_handler."""
         app = Nebula("localhost", 8000)
@@ -185,6 +213,8 @@ class TestNebulaHooks:
             return Response("Method Not Allowed", 405)
 
         assert app.exec_on_method_not_allowed is not None
+
+        app.stop()
 
 
 class TestJsonify:

@@ -4,6 +4,7 @@ from .exceptions import TemplateNotFound, InvalidMethod
 from .types import AVAILABLE_METHODS
 
 import json
+import mimetypes
 
 
 def jsonify(dictionary: dict, status: int = 200) -> Response:

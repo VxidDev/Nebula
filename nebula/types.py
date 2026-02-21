@@ -3,6 +3,7 @@ from typing import Any, Dict
 AVAILABLE_METHODS = ["GET", "POST"]
 
 DEFAULT_TEMPLATES_DIR = "./templates"
+DEFAULT_STATICS_DIR = "./statics"
 
 DEFAULT_404_BODY = """
     <head><title>404 Not Found</title></head>
