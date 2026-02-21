@@ -1,7 +1,7 @@
 [project]
 name = "nebula"
-version = "0.1.0"
-description = "Nebula: Lightweight Python HTTP server with decorator-based routing."
+version = "0.2.0"
+description = "Nebula is a lightweight Python backend framework with middleware and routing, built on top of the standard http.server module. It allows you to create web applications quickly with simple, decorator-based routing."
 
 #[project.dependencies]
 

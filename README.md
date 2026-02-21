@@ -45,9 +45,14 @@ def func(request):
 def internal_error():
     return Response('<h1 style="font-size: 100px;">something doesnt work.</h1>', 500)
 
-@app.route("/")
+@app.route("/" , methods=["GET" , "POST"])
 def main():
-    return Response(app.load_template("index.html"), 200)
+    if app.request.method == "POST":    
+        data = app.request.data.get_json()
+
+        return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
+
+    return Response(app.load_template("test.html"), 200)
 
 @app.route("/fruits")
 def jsonTest():
