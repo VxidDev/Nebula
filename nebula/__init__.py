@@ -2,6 +2,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .utils.route import Route
 from typing import Dict
 
+class Request:
+    def __init__(self, route: Route, method: str):
+        self.route = route 
+        self.method = method 
+
 class TemplateNotFound(BaseException):
     pass
 
@@ -25,8 +30,11 @@ class Nebula:
         self.exec_before_request = None
         self.exec_after_request = None
 
+        self.request = None
+
         class Handler(BaseHTTPRequestHandler):
             server_instance: "HttpServer" = None
+
             def do_GET(self):
                 route = Route(self.path)
                 requestedRoute = self.server_instance.routes.get(route.path, None)
@@ -37,8 +45,10 @@ class Nebula:
                     self.wfile.write(f"{self.server_instance.NOT_FOUND}".encode())
                     return
 
+                self.server_instance.request = Request(route, self.command)
+
                 if self.server_instance.exec_before_request:
-                    self.server_instance.exec_before_request(route)
+                    self.server_instance.exec_before_request(self.server_instance.request)
 
                 result = requestedRoute()
 
@@ -47,7 +57,7 @@ class Nebula:
                 self.wfile.write(result[0].encode())
 
                 if self.server_instance.exec_after_request:
-                    self.server_instance.exec_after_request(route)
+                    self.server_instance.exec_after_request(self.server_instance.request)
 
                 return
 
@@ -80,14 +90,14 @@ class Nebula:
         except FileNotFoundError:
             raise TemplateNotFound(f"File: '{filename}' not found in {self.templates_dir} directory.")
 
-    def before_request(self, func): # func(arg: Route)
+    def before_request(self, func): # func(arg: Request)
         self.exec_before_request = func 
         def wrapper():
             return func
 
         return wrapper
 
-    def after_request(self, func): # func(arg: Route)
+    def after_request(self, func): # func(arg: Request)
         self.exec_after_request = func 
         def wrapper():
             return func 

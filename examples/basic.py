@@ -5,12 +5,12 @@ app = Nebula("localhost", 8000)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
 
 @app.before_request
-def func(route):
-    print(f"received request on {route.path}...")
+def func(request):
+    print(f"received request on {request.route.path} with method {request.method}...")
 
 @app.after_request
-def func(route):
-    print(f"successfully handled request on {route.path}...")
+def func(request):
+    print(f"successfully handled request on {request.route.path} with method {request.method}...")
 
 @app.route("/")
 def main():
