@@ -1,8 +1,10 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .utils.route import Route
 from typing import Dict , List, Callable, Optional
+from pathlib import Path
 
 import json
+import mimetypes
 
 AVAILABLE_METHODS = ["GET" , "POST"]
 
@@ -48,8 +50,10 @@ class Nebula:
         self.host = host 
         self.port = port 
 
-        self.routes: Dict[str, Dict[str, Any]] = {}
         self.templates_dir = "./templates"
+        self.statics_dir = "./statics"
+
+        self.routes: Dict[str, Dict[str, Any]] = {}
 
         self.NOT_FOUND = """
             <head><title>404 Not Found</title></head>
@@ -91,6 +95,18 @@ class Nebula:
 
             def do_GET(self):
                 route = Route(self.path)
+                statics_route = str(self.server_instance.statics_dir).rsplit('/', 1)[1]
+                is_requesting_statics = route.path.split('/' , 2)[1] == statics_route 
+
+                if is_requesting_statics:
+                    try:
+                        result = self.server_instance._statics_handler(route)
+                        self.handle_response(result)
+                        return
+                    except Exception as e:
+                        self.internal_error(e)
+                        return
+
                 requestedRoute = self.server_instance.routes.get(route.path, None)
 
                 if not requestedRoute:
@@ -170,8 +186,16 @@ class Nebula:
 
             def handle_response(self, response: Response) -> None:
                 self.send_response(response.http_code)
+
+                for key, value in response.headers.items():
+                    self.send_header(key, value)
+
                 self.end_headers()
-                self.wfile.write(response.body.encode())
+
+                if isinstance(response.body, str): 
+                    self.wfile.write(response.body.encode())
+                else:
+                    self.wfile.write(response.body)
 
                 return
 
@@ -247,6 +271,65 @@ class Nebula:
             self.exec_on_method_not_allowed = func 
 
         return Response(self.METHOD_NOT_ALLOWED , 405)
+
+    def _statics_handler(self, route: Route) -> Optional[Response]:
+        if self.debug:
+            print(f"Request path: {self.request.route.path}")
+            
+        parts = route.path.lstrip("/").split("/", 1)
+
+        if len(parts) < 2:
+            # No filename specified
+            return Response(self.NOT_FOUND, 404)
+
+        rel_path = parts[1]  # e.g., "file.js"
+        full_path = Path(self.statics_dir) / rel_path
+
+        if self.debug:
+            print(f"Trying to serve static file: {full_path.resolve()}")
+
+        if not full_path.exists() or not full_path.is_file():
+            return Response(self.NOT_FOUND, 404)
+
+        mime, _ = mimetypes.guess_type(full_path)
+
+        if not mime:
+            # fallback
+            ext = full_path.suffix.lower()
+
+            if ext == ".js":
+                mime = "application/javascript"
+
+            elif ext == ".css":
+                mime = "text/css"
+
+            elif ext in [".html", ".htm"]:
+                mime = "text/html"
+
+            else:
+                mime = "application/octet-stream"
+
+        if mime.startswith("text/") or mime == "application/javascript":
+            mime += "; charset=utf-8"
+        
+        with open(full_path , "rb") as file:
+            content = file.read()
+
+        headers: dict = {
+            "Content-Type": mime,
+            "Cache-Control": "public, max-age=3600"
+        }
+
+        if mime.startswith("text/") or mime == "application/javascript":
+            body = content.decode(errors="ignore")
+        else:
+            body = content
+
+        return Response(
+            body=body,
+            http_code=200, 
+            headers=headers
+        )
 
 def jsonify(dictionary: dict , status: int = 200) -> Response:
     return Response(

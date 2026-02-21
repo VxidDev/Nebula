@@ -11,6 +11,7 @@
 - **Lightweight**: Built on Python's standard library with no external dependencies.
 - **Decorator-based Routing**: Define your routes with simple and intuitive decorators.
 - **Template Loading**: Easily load and serve HTML templates from a designated directory.
+- **Statics Loading**: Easily load and serve files from designated directory.
 - **Middleware Support**: `before_request` and `after_request` hooks for flexible request handling.
 - **Easy to Use**: Get a server up and running in just a few lines of code.
 
@@ -36,33 +37,36 @@ Here's a basic example of creating a simple web server with Nebula.
 **main.py**:
 
 ```py
-from nebula import Nebula, Response, jsonify
+from nebula import Nebula , Response , jsonify
 from pathlib import Path 
 
-app = Nebula("localhost", 8000, debug=True)
+app = Nebula("localhost", 8000, False)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
+app.statics_dir = Path(__file__).resolve().parent / "statics"
 
 @app.before_request
-def before_request(request):
+def func(request):
     print(f"received request on {request.route.path} with method {request.method}...")
 
 @app.after_request
-def after_request(request):
+def func(request):
     print(f"successfully handled request on {request.route.path} with method {request.method}...")
 
 @app.internal_error_handler
 def internal_error():
-    return Response('<h1 style="font-size: 100px;">something doesn’t work.</h1>', 500)
+    return Response('<h1 style="font-size: 100px;">something doesnt work.</h1>', 500)
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/" , methods=["GET" , "POST"])
 def main():
     if app.request.method == "POST":    
         data = app.request.data.get_json()
+
         return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
-    return Response(app.load_template("index.html"), 200)
+
+    return Response(app.load_template("test.html"), 200)
 
 @app.route("/fruits")
-def json_test():
+def jsonTest():
     return jsonify({
         "fruits": {
             "apples": 6,
