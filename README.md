@@ -1,6 +1,6 @@
 # Nebula
 
-**Nebula** is a lightweight and easy-to-use HTTP server for Python, built on top of the standard `http.server` module. It allows you to create web applications quickly with simple, decorator-based routing.
+**Nebula** is a lightweight Python backend framework with middleware and routing, built on top of the standard `http.server` module. It allows you to create web applications quickly with simple, decorator-based routing.
 
 ## Features
 
@@ -27,7 +27,7 @@ Here's a basic example of how to create a simple web server with Nebula.
 First, create your main application file (e.g., `main.py`):
 
 ```python
-from nebula import Nebula , Response
+from nebula import Nebula , Response , jsonify
 from pathlib import Path 
 
 app = Nebula("localhost", 8000, True)
@@ -43,11 +43,21 @@ def func(request):
 
 @app.internal_error_handler
 def internal_error():
-    return Response('<h1 style="font-size: 100px;">something doesnt working.</h1>', 500)
+    return Response('<h1 style="font-size: 100px;">something doesnt work.</h1>', 500)
 
 @app.route("/")
 def main():
     return Response(app.load_template("index.html"), 200)
+
+@app.route("/fruits")
+def jsonTest():
+    return jsonify({
+        "fruits": {
+            "apples": 6,
+            "pears": 10,
+            "mangos": 9
+        } 
+    })
 
 app.run()
 ```
