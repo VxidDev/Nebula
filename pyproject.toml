@@ -5,7 +5,8 @@ description = "Nebula is a lightweight Python backend framework with middleware 
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "VxidDev"}
+    {name = "VxidDev"},
+    {name = "amogus-gggy"}
 ]
 requires-python = ">=3.10"
 
