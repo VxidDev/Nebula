@@ -100,6 +100,9 @@ python main.py
 
 Open your browser and navigate to `http://localhost:8000` to see your page.
 
+## Contributions <3
+**amogus-gggy** - refactoring Nebula 0.2.0. Huge thank you!
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
