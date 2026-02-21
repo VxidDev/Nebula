@@ -2,15 +2,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .utils.route import Route
 from typing import Dict
 
+import json
+
 class Request:
     def __init__(self, route: Route, method: str):
         self.route = route 
         self.method = method
 
 class Response:
-    def __init__(self, body: str , http_code: int):
+    def __init__(self, body: str , http_code: int, headers: dict = {}):
         self.body = body 
         self.http_code = http_code 
+        self.headers = headers
 
 class TemplateNotFound(BaseException):
     pass
@@ -72,6 +75,10 @@ class Nebula:
                     result: Response = requestedRoute()
 
                     self.send_response(result.http_code)
+
+                    for key, value in result.headers.items():
+                        self.send_header(key, value)
+
                     self.end_headers()
                     self.wfile.write(result.body.encode())
 
@@ -146,3 +153,10 @@ class Nebula:
             self.exec_on_internal_error = func
         
         return Response(self.INTERNAL_ERROR , 500)
+
+def jsonify(dictionary: dict , status: int = 200):
+    return Response(
+        body=json.dumps(dictionary),
+        http_code=status,
+        headers={"Content-Type": "application/json"} 
+    )

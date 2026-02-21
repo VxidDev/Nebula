@@ -1,4 +1,4 @@
-from nebula import Nebula , Response
+from nebula import Nebula , Response , jsonify
 from pathlib import Path 
 
 app = Nebula("localhost", 8000, True)
@@ -14,10 +14,20 @@ def func(request):
 
 @app.internal_error_handler
 def internal_error():
-    return Response('<h1 style="font-size: 100px;">something doesnt working.</h1>', 500)
+    return Response('<h1 style="font-size: 100px;">something doesnt work.</h1>', 500)
 
 @app.route("/")
 def main():
     return Response(app.load_template("test.html"), 200)
+
+@app.route("/fruits")
+def jsonTest():
+    return jsonify({
+        "fruits": {
+            "apples": 6,
+            "pears": 10,
+            "mangos": 9
+        } 
+    })
 
 app.run()
