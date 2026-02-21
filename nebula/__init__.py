@@ -5,13 +5,20 @@ from typing import Dict
 class Request:
     def __init__(self, route: Route, method: str):
         self.route = route 
-        self.method = method 
+        self.method = method
+
+class Response:
+    def __init__(self, body: str , http_code: int):
+        self.body = body 
+        self.http_code = http_code 
 
 class TemplateNotFound(BaseException):
     pass
 
 class Nebula:
-    def __init__(self, host: str , port: int):
+    def __init__(self, host: str , port: int, debug: bool = False):
+        self.debug = debug
+
         self.host = host 
         self.port = port 
 
@@ -27,8 +34,19 @@ class Nebula:
             </body>
         """
 
+        self.INTERNAL_ERROR = """
+            <head><title>500 Internal Server Error</title></head>
+
+            <body>
+                <h1>Internal Server Error</h1>
+                <p>The server encountered an unexpected condition that prevented it from fulfilling the request.</p>
+                <p>Please try again later.</p>
+            </body>
+        """
+
         self.exec_before_request = None
         self.exec_after_request = None
+        self.exec_on_internal_error = self.internal_error_handler
 
         self.request = None
 
@@ -48,16 +66,41 @@ class Nebula:
                 self.server_instance.request = Request(route, self.command)
 
                 if self.server_instance.exec_before_request:
-                    self.server_instance.exec_before_request(self.server_instance.request)
+                    try:
+                        self.server_instance.exec_before_request(self.server_instance.request)
+                    except Exception as e:
+                        self.internal_error(e)
 
-                result = requestedRoute()
+                        return
+                        
 
-                self.send_response(result[1])
+                result: Response = requestedRoute()
+
+                self.send_response(result.http_code)
                 self.end_headers()
-                self.wfile.write(result[0].encode())
+                self.wfile.write(result.body.encode())
 
                 if self.server_instance.exec_after_request:
-                    self.server_instance.exec_after_request(self.server_instance.request)
+                    try:
+                        self.server_instance.exec_after_request(self.server_instance.request)
+                    except Exception as e:
+                        self.internal_error(e)
+                        return
+
+                return
+
+            def handle_response(self, response: Response) -> None:
+                self.send_response(response.http_code)
+                self.end_headers()
+                self.wfile.write(response.body.encode())
+
+                return
+
+            def internal_error(self, exception: Exception):
+                if self.server_instance.debug:
+                    print(str(exception))
+                result = self.server_instance.exec_on_internal_error()
+                self.handle_response(result)
 
                 return
 
@@ -103,3 +146,9 @@ class Nebula:
             return func 
 
         return wrapper
+
+    def internal_error_handler(self, func = None) -> str:
+        if func:
+            self.exec_on_internal_error = func
+        
+        return Response(self.INTERNAL_ERROR , 500)

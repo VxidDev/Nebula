@@ -1,7 +1,7 @@
-from nebula import Nebula
+from nebula import Nebula , Response
 from pathlib import Path 
 
-app = Nebula("localhost", 8000)
+app = Nebula("localhost", 8000, True)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
 
 @app.before_request
@@ -14,6 +14,6 @@ def func(request):
 
 @app.route("/")
 def main():
-    return app.load_template("test.html"), 200
+    return Response(app.load_template("test.html"), 200)
 
 app.run()
