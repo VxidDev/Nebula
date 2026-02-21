@@ -22,6 +22,9 @@ class Nebula:
             </body>
         """
 
+        self.exec_before_request = None
+        self.exec_after_request = None
+
         class Handler(BaseHTTPRequestHandler):
             server_instance: "HttpServer" = None
             def do_GET(self):
@@ -34,11 +37,17 @@ class Nebula:
                     self.wfile.write(f"{self.server_instance.NOT_FOUND}".encode())
                     return
 
+                if self.server_instance.exec_before_request:
+                    self.server_instance.exec_before_request(route)
+
                 result = requestedRoute()
 
                 self.send_response(result[1])
                 self.end_headers()
                 self.wfile.write(result[0].encode())
+
+                if self.server_instance.exec_after_request:
+                    self.server_instance.exec_after_request(route)
 
                 return
 
@@ -53,7 +62,7 @@ class Nebula:
         except KeyboardInterrupt:
             self.server.shutdown()
 
-    def route(self, path: str) -> None: # only GET for now. 
+    def route(self, path: str): # only GET for now. 
         def decorator(func):
             self.routes[path] = func
             return func
@@ -70,3 +79,17 @@ class Nebula:
             return content
         except FileNotFoundError:
             raise TemplateNotFound(f"File: '{filename}' not found in {self.templates_dir} directory.")
+
+    def before_request(self, func): # func(arg: Route)
+        self.exec_before_request = func 
+        def wrapper():
+            return func
+
+        return wrapper
+
+    def after_request(self, func): # func(arg: Route)
+        self.exec_after_request = func 
+        def wrapper():
+            return func 
+
+        return wrapper
