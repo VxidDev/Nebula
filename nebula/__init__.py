@@ -65,29 +65,23 @@ class Nebula:
 
                 self.server_instance.request = Request(route, self.command)
 
-                if self.server_instance.exec_before_request:
-                    try:
+                try:
+                    if self.server_instance.exec_before_request:
                         self.server_instance.exec_before_request(self.server_instance.request)
-                    except Exception as e:
-                        self.internal_error(e)
+                            
+                    result: Response = requestedRoute()
 
-                        return
-                        
+                    self.send_response(result.http_code)
+                    self.end_headers()
+                    self.wfile.write(result.body.encode())
 
-                result: Response = requestedRoute()
-
-                self.send_response(result.http_code)
-                self.end_headers()
-                self.wfile.write(result.body.encode())
-
-                if self.server_instance.exec_after_request:
-                    try:
+                    if self.server_instance.exec_after_request:
                         self.server_instance.exec_after_request(self.server_instance.request)
-                    except Exception as e:
-                        self.internal_error(e)
-                        return
 
-                return
+                    return
+                except Exception as e:
+                    self.internal_error(e)
+                    return 
 
             def handle_response(self, response: Response) -> None:
                 self.send_response(response.http_code)
