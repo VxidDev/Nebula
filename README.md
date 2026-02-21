@@ -1,61 +1,68 @@
 # Nebula
 
+[![PyPI](https://img.shields.io/pypi/v/nebula-core?style=flat-square)](https://pypi.org/project/nebula-core/)
+[![Stars](https://img.shields.io/github/stars/VxidDev/nebula?style=flat-square)](https://github.com/VxidDev/nebula/stargazers)
+[![Contributors](https://img.shields.io/github/contributors/VxidDev/nebula?style=flat-square)](https://github.com/VxidDev/nebula/graphs/contributors)
+
 **Nebula** is a lightweight Python backend framework with middleware and routing, built on top of the standard `http.server` module. It allows you to create web applications quickly with simple, decorator-based routing.
 
 ## Features
 
--   **Lightweight**: Built on Python's standard library with no external dependencies.
--   **Decorator-based Routing**: Define your routes with simple and intuitive decorators.
--   **Template Loading**: Easily load and serve HTML templates from a designated directory.
--   **Easy to Use**: Get a server up and running in just a few lines of code.
+- **Lightweight**: Built on Python's standard library with no external dependencies.
+- **Decorator-based Routing**: Define your routes with simple and intuitive decorators.
+- **Template Loading**: Easily load and serve HTML templates from a designated directory.
+- **Middleware Support**: `before_request` and `after_request` hooks for flexible request handling.
+- **Easy to Use**: Get a server up and running in just a few lines of code.
 
 ## Installation
 
-Since Nebula is self-contained and has no external dependencies, you can clone this repository to get started:
+Install Nebula from PyPI:
 
 ```bash
-git clone https://github.com/your-username/nebula.git
-cd nebula
-
-pip install .
+pip install nebula-core
 ```
 
+or clone and install from GitHub.
+
+```bash
+git clone https://github.com/VxidDev/nebula.git
+cd nebula
+pip install .
+```
 ## Usage
 
-Here's a basic example of how to create a simple web server with Nebula.
+Here's a basic example of creating a simple web server with Nebula.
 
-First, create your main application file (e.g., `main.py`):
+**main.py**:
 
-```python
-from nebula import Nebula , Response , jsonify
+```py
+from nebula import Nebula, Response, jsonify
 from pathlib import Path 
 
-app = Nebula("localhost", 8000, True)
+app = Nebula("localhost", 8000, debug=True)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
 
 @app.before_request
-def func(request):
+def before_request(request):
     print(f"received request on {request.route.path} with method {request.method}...")
 
 @app.after_request
-def func(request):
+def after_request(request):
     print(f"successfully handled request on {request.route.path} with method {request.method}...")
 
 @app.internal_error_handler
 def internal_error():
-    return Response('<h1 style="font-size: 100px;">something doesnt work.</h1>', 500)
+    return Response('<h1 style="font-size: 100px;">something doesn’t work.</h1>', 500)
 
-@app.route("/" , methods=["GET" , "POST"])
+@app.route("/", methods=["GET", "POST"])
 def main():
     if app.request.method == "POST":    
         data = app.request.data.get_json()
-
         return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
-
-    return Response(app.load_template("test.html"), 200)
+    return Response(app.load_template("index.html"), 200)
 
 @app.route("/fruits")
-def jsonTest():
+def json_test():
     return jsonify({
         "fruits": {
             "apples": 6,
@@ -67,9 +74,8 @@ def jsonTest():
 app.run()
 ```
 
-Next, create a `templates` directory and add an `index.html` file inside it:
+**templates/index.html**:
 
-`templates/index.html`:
 ```html
 <!DOCTYPE html>
 <html>
@@ -83,8 +89,7 @@ Next, create a `templates` directory and add an `index.html` file inside it:
 </html>
 ```
 
-Now, you can run your application:
-
+**Run your app**:
 ```bash
 python main.py
 ```
@@ -93,4 +98,4 @@ Open your browser and navigate to `http://localhost:8000` to see your page.
 
 ## License
 
-This project is licensed under the terms of the LICENSE file.
+This project is licensed under the MIT License - see the LICENSE file for details.

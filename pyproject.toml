@@ -1,5 +1,5 @@
 [project]
-name = "nebula"
+name = "nebula-core"
 version = "0.2.0"
 description = "Nebula is a lightweight Python backend framework with middleware and routing, built on top of the standard http.server module. It allows you to create web applications quickly with simple, decorator-based routing."
 readme = "README.md"
