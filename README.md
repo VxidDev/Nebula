@@ -27,24 +27,29 @@ Here's a basic example of how to create a simple web server with Nebula.
 First, create your main application file (e.g., `main.py`):
 
 ```python
-from nebula import Nebula
-from pathlib import Path
+from nebula import Nebula , Response
+from pathlib import Path 
 
-# Initialize the application
-app = Nebula("localhost", 8000)
-
-# Set the directory for your templates
+app = Nebula("localhost", 8000, True)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
 
-# Define a route for the root URL
+@app.before_request
+def func(request):
+    print(f"received request on {request.route.path} with method {request.method}...")
+
+@app.after_request
+def func(request):
+    print(f"successfully handled request on {request.route.path} with method {request.method}...")
+
+@app.internal_error_handler
+def internal_error():
+    return Response('<h1 style="font-size: 100px;">something doesnt working.</h1>', 500)
+
 @app.route("/")
 def main():
-    # Load and return an HTML template
-    return app.load_template("index.html"), 200
+    return Response(app.load_template("index.html"), 200)
 
-# Run the server
-if __name__ == "__main__":
-    app.run()
+app.run()
 ```
 
 Next, create a `templates` directory and add an `index.html` file inside it:
