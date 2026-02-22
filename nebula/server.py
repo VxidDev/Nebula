@@ -10,6 +10,7 @@ from werkzeug.exceptions import NotFound, MethodNotAllowed
 from .types import (
     AVAILABLE_METHODS,
     DEFAULT_TEMPLATES_DIR,
+    DEFAULT_STATICS_DIR,
     DEFAULT_404_BODY,
     DEFAULT_500_BODY,
     DEFAULT_405_BODY,
@@ -28,6 +29,7 @@ class Nebula:
         self.view_functions: Dict[str, Callable] = {}
 
         self.templates_dir = DEFAULT_TEMPLATES_DIR
+        self.statics_dir = DEFAULT_STATICS_DIR
 
         self.NOT_FOUND = DEFAULT_404_BODY
         self.INTERNAL_ERROR = DEFAULT_500_BODY
@@ -43,7 +45,6 @@ class Nebula:
         }
 
     def run(self):
-        print(f"Server running at http://{self.host}:{self.port}")
         run_simple(self.host, self.port, self, use_debugger=self.debug, use_reloader=self.debug)
 
     def dispatch_request(self, request: WerkzeugRequest):
@@ -77,8 +78,10 @@ class Nebula:
 
     def __call__(self, environ, start_response):
         request = WerkzeugRequest(environ)
-        response = self.dispatch_request(request)
-        return response(environ, start_response)
+
+        with request:
+            response = self.dispatch_request(request)
+            return response(environ, start_response)
 
     def route(self, path: str, methods: List[str] = ["GET"]) -> Callable:
         def decorator(f):

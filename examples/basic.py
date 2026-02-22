@@ -1,16 +1,14 @@
 from werkzeug.wrappers import Response
-from werkzeug.utils import send_file
-from nebula import Nebula
-from nebula.utils import jsonify
+
+from nebula import Nebula 
+from nebula.utils import jsonify, init_static_serving
 from pathlib import Path 
 
 app = Nebula("localhost", 8000, False)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
 app.statics_dir = Path(__file__).resolve().parent / "statics"
 
-@app.route(f"/statics/<path>")
-def serve_statics(request, path):
-    return send_file(app.statics_dir / path , environ=request.environ)
+init_static_serving(app, "statics")
 
 @app.route("/" , methods=["GET" , "POST"])
 def main(request):
@@ -21,7 +19,7 @@ def main(request):
 
     return Response(app.load_template("test.html"), 200, content_type="text/html")
 
-@app.route("/<name>")
+@app.route("/greet/<name>")
 def greet(request, name):
     return Response(f"Hi, {name}!", 200)
 
@@ -49,6 +47,6 @@ def error(request):
 
 @app.route("/api", methods=["POST"])
 def api(request):
-    return jsonify({"a": 1, "b": 2, "c": 3})
+    return jsonify({"a": 1, "b": 2, "c": 3}[request.get_json().get("item", "a")])
 
 app.run()
