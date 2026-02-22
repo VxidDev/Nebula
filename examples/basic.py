@@ -1,7 +1,7 @@
 from werkzeug.wrappers import Response
 
 from nebula import Nebula 
-from nebula.utils import jsonify, init_static_serving
+from nebula.utils import jsonify, init_static_serving , load_template
 from pathlib import Path 
 
 app = Nebula("localhost", 8000, False)
@@ -17,7 +17,7 @@ def main(request):
 
         return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
 
-    return Response(app.load_template("test.html"), 200, content_type="text/html")
+    return Response(load_template(app, "test.html"), 200, content_type="text/html")
 
 @app.route("/greet/<name>")
 def greet(request, name):

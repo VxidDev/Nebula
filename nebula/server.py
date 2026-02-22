@@ -96,17 +96,6 @@ class Nebula:
             return f
         return decorator
 
-    def load_template(self, filename: str) -> str:
-        """
-        Open and read file from ./templates/<filepath>
-        """
-        try:
-            with open(f"{self.templates_dir}/{filename}", "r") as file:
-                content = file.read()
-            return content
-        except FileNotFoundError:
-            raise TemplateNotFound(f"File: '{filename}' not found in {self.templates_dir} directory.")
-
     def before_request(self, func) -> Callable:
         self.exec_before_request = func
         return func
