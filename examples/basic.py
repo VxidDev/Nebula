@@ -1,7 +1,7 @@
 from nebula import Nebula , Response , jsonify
 from pathlib import Path 
 
-app = Nebula("localhost", 8000, False)
+app = Nebula("localhost", 8000, True)
 app.templates_dir = Path(__file__).resolve().parent / "templates"
 app.statics_dir = Path(__file__).resolve().parent / "statics"
 
@@ -35,5 +35,25 @@ def jsonTest():
             "mangos": 9
         } 
     })
+
+@app.error_handler(500)
+def internal_error():
+    return Response("Internal Error!" , 500)
+
+@app.error_handler(405)
+def method_not_allowed():
+    return Response("Cant do that :[", 405)
+
+@app.error_handler(404)
+def not_found():
+    return Response("Cant find that :(", 404)
+
+@app.route("/internal-error")
+def error():
+    return Response(f"Error!", 500)
+
+@app.route("/api", methods=["POST"])
+def api():
+    return jsonify({"a": 1, "b": 2, "c": 3})
 
 app.run()

@@ -32,8 +32,16 @@ class Nebula:
 
         self.exec_before_request: Optional[Callable] = None
         self.exec_after_request: Optional[Callable] = None
+
         self.exec_on_internal_error: Callable = self.internal_error_handler
         self.exec_on_method_not_allowed: Callable = self.method_not_allowed_handler
+        self.exec_on_content_not_found: Callable = self.content_not_found_handler
+
+        self.error_handlers: dict[int, Callable] = {
+            404: self.exec_on_content_not_found,
+            405: self.exec_on_method_not_allowed,
+            500: self.exec_on_internal_error
+        }
 
         self.request: Optional[Request] = None
 
@@ -118,12 +126,14 @@ class Nebula:
     def internal_error_handler(self, func = None) -> Response:
         if func:
             self.exec_on_internal_error = func
+            self.error_handlers[500] = func
         
         return Response(self.INTERNAL_ERROR , 500)
 
     def method_not_allowed_handler(self, func = None) -> Response:
         if func:
             self.exec_on_method_not_allowed = func 
+            self.error_handlers[405] = func
 
         return Response(self.METHOD_NOT_ALLOWED , 405)
 
@@ -185,3 +195,20 @@ class Nebula:
             http_code=200, 
             headers=headers
         )
+
+    def error_handler(self, http_code: int) -> Callable:
+        if not (400 <= http_code <= 599):
+            raise ValueError("Error handler must be 400-599 status code.")
+
+        def decorator(func: Callable) -> Callable:
+            self.error_handlers[http_code] = func
+            return func 
+        
+        return decorator
+
+    def content_not_found_handler(self, func = None) -> Callable:
+        if func:
+            self.exec_on_content_not_found = func
+            self.error_handlers[404] = func
+        
+        return Response(self.NOT_FOUND , 404)

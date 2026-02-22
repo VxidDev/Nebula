@@ -28,9 +28,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         requestedRoute = self.server_instance.routes.get(route.path, None)
 
         if not requestedRoute:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(f"{self.server_instance.NOT_FOUND}".encode())
+            self.content_not_found()
             return
 
         if "GET" not in requestedRoute["methods"]:
@@ -44,14 +42,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.server_instance.exec_before_request(self.server_instance.request)
                     
             result: Response = requestedRoute["function"]()
+            if 400 <= result.http_code <= 599:
+                handler = self.server_instance.error_handlers.get(result.http_code , None)
 
-            self.send_response(result.http_code)
+                if handler:
+                    result: Response = handler()
 
-            for key, value in result.headers.items():
-                self.send_header(key, value)
-
-            self.end_headers()
-            self.wfile.write(result.body.encode())
+            self.handle_response(result)
 
             if self.server_instance.exec_after_request:
                 self.server_instance.exec_after_request(self.server_instance.request)
@@ -66,9 +63,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         requestedRoute = self.server_instance.routes.get(route.path, None)
 
         if not requestedRoute:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(f"{self.server_instance.NOT_FOUND}".encode())
+            self.content_not_found()
             return
 
         if "POST" not in requestedRoute["methods"]:
@@ -86,13 +81,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                     
             result: Response = requestedRoute["function"]()
 
-            self.send_response(result.http_code)
+            if 400 <= result.http_code <= 599:
+                handler = self.server_instance.error_handlers.get(result.http_code , None)
 
-            for key, value in result.headers.items():
-                self.send_header(key, value)
+                if handler:
+                    result: Response = handler()
 
-            self.end_headers()
-            self.wfile.write(result.body.encode())
+            self.handle_response(result)
 
             if self.server_instance.exec_after_request:
                 self.server_instance.exec_after_request(self.server_instance.request)
@@ -120,11 +115,16 @@ class RequestHandler(BaseHTTPRequestHandler):
     def internal_error(self, exception: Exception) -> None:
         if self.server_instance.debug:
             print(str(exception))
-        result: Response = self.server_instance.exec_on_internal_error()
+        result: Response = self.server_instance.error_handlers[500]()
         self.handle_response(result)
         return
 
     def method_not_allowed(self) -> None:
-        result: Response = self.server_instance.exec_on_method_not_allowed()
+        result: Response = self.server_instance.error_handlers[405]()
+        self.handle_response(result)
+        return
+
+    def content_not_found(self) -> None:
+        result: Response = self.server_instance.error_handlers[404]()
         self.handle_response(result)
         return
