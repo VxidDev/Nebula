@@ -44,6 +44,8 @@ class Nebula:
             500: self.internal_error_handler,
         }
 
+        self.jinja_env = None # must be initialized via nebula.utils.init_template_renderer
+
     def run(self):
         run_simple(self.host, self.port, self, use_debugger=self.debug, use_reloader=self.debug)
 
