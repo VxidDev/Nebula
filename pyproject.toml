@@ -10,7 +10,9 @@ authors = [
 ]
 requires-python = ">=3.10"
 
-#[project.dependencies]
+dependencies = [
+    "werkzeug"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
