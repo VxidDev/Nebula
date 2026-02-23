@@ -60,7 +60,7 @@ def main(request):
 
         return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
 
-    return Response(load_template(app, "index.html"), 200, content_type="text/html")
+    return Response(load_template(app, "test.html"), 200, content_type="text/html")
 
 @app.route("/greet/<name>")
 def greet(request, name):
@@ -98,7 +98,7 @@ def api(request):
 
 @app.route("/jinja")
 def jinja(request):
-    return render_template(app, "jinja_template.html", APP=app) # same as jinja_template variable, but as a file.
+    return render_template(app, "jinja_template.html", APP=app)
 
 @app.route("/jinja/string")
 def jinja_string(request):
