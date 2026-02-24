@@ -1,14 +1,16 @@
 from werkzeug.wrappers import Response
 
 from nebula import Nebula 
-from nebula.utils import jsonify, init_static_serving , load_template , render_template , init_template_renderer , render_template_string
+from nebula.utils import (
+    jsonify, init_static_serving , load_template , render_template , init_template_renderer , render_template_string,
+    init_template_path
+)
 from pathlib import Path 
 
-app = Nebula("localhost", 8000, False)
-app.templates_dir = Path(__file__).resolve().parent / "templates"
-app.statics_dir = Path(__file__).resolve().parent / "statics"
+app = Nebula(__file__ , "localhost", 8000, False)
 
 init_static_serving(app, "statics")
+init_template_path(app)
 init_template_renderer(app)
 
 jinja_template = """
