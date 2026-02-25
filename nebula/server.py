@@ -19,7 +19,8 @@ from .exceptions import InvalidMethod, TemplateNotFound
 
 
 class Nebula:
-    def __init__(self, host: str, port: int, debug: bool = False):
+    def __init__(self, module_name: str , host: str, port: int, debug: bool = False):
+        self.module_name = module_name
         self.debug = debug
 
         self.host = host

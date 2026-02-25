@@ -1,3 +1,5 @@
+from ..exceptions import TemplateNotFound
+
 def load_template(app, filename: str) -> str:
     """
     Open and read file from ./templates/<filepath>

@@ -1,14 +1,14 @@
-from werkzeug.wrappers import Response
+from nebula import Nebula , Response
 
-from nebula import Nebula 
-from nebula.utils import jsonify, init_static_serving , load_template , render_template , init_template_renderer , render_template_string
-from pathlib import Path 
+from nebula.utils import (
+    jsonify, htmlify, init_static_serving , load_template , render_template , init_template_renderer , render_template_string,
+    init_template_path
+)
 
-app = Nebula("localhost", 8000, False)
-app.templates_dir = Path(__file__).resolve().parent / "templates"
-app.statics_dir = Path(__file__).resolve().parent / "statics"
+app = Nebula(__file__ , "localhost", 8000, False)
 
 init_static_serving(app, "statics")
+init_template_path(app)
 init_template_renderer(app)
 
 jinja_template = """
@@ -22,11 +22,11 @@ def main(request):
 
         return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
 
-    return Response(load_template(app, "test.html"), 200, content_type="text/html")
+    return render_template(app, "test.html")
 
 @app.route("/greet/<name>")
 def greet(request, name):
-    return Response(f"Hi, {name}!", 200)
+    return htmlify(f"<h1>Hi, {name}!</h1>")
 
 @app.route("/fruits")
 def jsonTest(request):
@@ -40,15 +40,15 @@ def jsonTest(request):
 
 @app.error_handler(405)
 def method_not_allowed(request):
-    return Response("<h1>Cant do that :[</h1>", 405, headers={"Content-Type": "text/html"})
+    return htmlify("<h1>Cant do that :[</h1>", 405)
 
 @app.error_handler(404)
 def not_found(request):
-    return Response("<h1>Cant find that :(</h1>", 404, headers={"Content-Type": "text/html"})
+    return htmlify("<h1>Cant find that :(</h1>", 404)
 
 @app.error_handler(500)
 def doesnt_work(request):
-    return Response("<h1>Internal Error!</h1>", 500, headers={"Content-Type": "text/html"})
+    return htmlify("<h1>Internal Error!</h1>", 500)
 
 @app.route("/internal-error")
 def error(request):
@@ -64,6 +64,6 @@ def jinja(request):
 
 @app.route("/jinja/string")
 def jinja_string(request):
-    return Response(render_template_string(app, jinja_template, APP=app), 200 , headers={"Content-Type": "text/html"})
+    return htmlify(render_template_string(app, jinja_template, APP=app))
 
 app.run()

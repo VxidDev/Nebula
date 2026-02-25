@@ -4,10 +4,6 @@ from werkzeug import Response
 class TemplateRendererError(BaseException):
     pass
 
-def init_template_renderer(app) -> None:
-    app.jinja_env = Environment(loader=FileSystemLoader(app.templates_dir))
-    return
-
 def render_template(app, filename: str, **kwargs) -> Response:
     if not app.jinja_env:
         raise TemplateRendererError("Template renderer not initialized.") 
