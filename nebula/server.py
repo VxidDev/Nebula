@@ -2,6 +2,7 @@ from typing import Dict, List, Callable, Optional, Any
 from pathlib import Path
 import mimetypes
 
+from werkzeug.local import Local, LocalProxy
 from werkzeug.wrappers import Request as WerkzeugRequest, Response as WerkzeugResponse
 from werkzeug.serving import run_simple
 from werkzeug.routing import Map, Rule
@@ -18,8 +19,12 @@ from .types import (
 from .exceptions import InvalidMethod, TemplateNotFound
 
 
+_request_ctx_stack = Local()
+current_request: WerkzeugRequest = LocalProxy(lambda: _request_ctx_stack.request)
+
+
 class Nebula:
-    def __init__(self, module_name: str , host: str, port: int, debug: bool = False):
+    def __init__(self, module_name: str, host: str, port: int, debug: bool = False):
         self.module_name = module_name
         self.debug = debug
 
@@ -45,39 +50,41 @@ class Nebula:
             500: self.internal_error_handler,
         }
 
-        self.jinja_env = None # must be initialized via nebula.utils.init_template_renderer
+        self.jinja_env = None  # must be initialized via nebula.utils.init_template_renderer
 
     def run(self):
         run_simple(self.host, self.port, self, use_debugger=self.debug, use_reloader=self.debug)
 
     def dispatch_request(self, request: WerkzeugRequest):
-        adapter = self.url_map.bind_to_environ(request.environ)
-        try:
-            endpoint, values = adapter.match()
-            
-            # Execute before_request hook
-            if self.exec_before_request:
-                self.exec_before_request()
+        _request_ctx_stack.request = request
+        with request:
+            adapter = self.url_map.bind_to_environ(request.environ)
+            try:
+                endpoint, values = adapter.match()
+                
+                # Execute before_request hook
+                if self.exec_before_request:
+                    self.exec_before_request()
+                
+                response = self.view_functions[endpoint](**values)
 
-            response = self.view_functions[endpoint](request, **values)
+                # Execute after_request hook
+                if self.exec_after_request:
+                    self.exec_after_request()
+                
+                if not isinstance(response, WerkzeugResponse):
+                    # If the view function returns a string, wrap it in a Response object
+                    response = WerkzeugResponse(str(response), 200)
 
-            # Execute after_request hook
-            if self.exec_after_request:
-                self.exec_after_request()
-            
-            if not isinstance(response, WerkzeugResponse):
-                # If the view function returns a string, wrap it in a Response object
-                response = WerkzeugResponse(str(response), 200)
+                return response
 
-            return response
-
-        except NotFound:
-            return self.error_handlers[404](request)
-        except MethodNotAllowed:
-            return self.error_handlers[405](request)
-        except Exception as e:
-            print(e)
-            return self.error_handlers[500](request)
+            except NotFound:
+                return self.error_handlers[404]()
+            except MethodNotAllowed:
+                return self.error_handlers[405]()
+            except Exception as e:
+                print(e)
+                return self.error_handlers[500]()
 
     def __call__(self, environ, start_response):
         request = WerkzeugRequest(environ)
@@ -107,10 +114,10 @@ class Nebula:
         self.exec_after_request = func
         return func
 
-    def internal_error_handler(self, request) -> WerkzeugResponse:
+    def internal_error_handler(self) -> WerkzeugResponse:
         return WerkzeugResponse(self.INTERNAL_ERROR, status=500)
 
-    def method_not_allowed_handler(self, request) -> WerkzeugResponse:
+    def method_not_allowed_handler(self) -> WerkzeugResponse:
         return WerkzeugResponse(self.METHOD_NOT_ALLOWED, status=405)
 
     def error_handler(self, http_code: int) -> Callable:
@@ -123,5 +130,5 @@ class Nebula:
         
         return decorator
 
-    def content_not_found_handler(self, request) -> WerkzeugResponse:
+    def content_not_found_handler(self) -> WerkzeugResponse:
         return WerkzeugResponse(self.NOT_FOUND, status=404)
