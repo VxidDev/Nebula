@@ -8,6 +8,8 @@ from werkzeug.serving import run_simple
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, MethodNotAllowed
 
+from .utils import init_static_serving , init_template_path , init_template_renderer
+
 from .types import (
     AVAILABLE_METHODS,
     DEFAULT_TEMPLATES_DIR,
@@ -51,6 +53,17 @@ class Nebula:
         }
 
         self.jinja_env = None  # must be initialized via nebula.utils.init_template_renderer
+
+    def init_all(self, static_endpoint: str = "static", static_dir: Optional[str] = None, template_dir: Optional[str] = None):
+        static_serve_dir = self.statics_dir if not static_dir else static_dir
+        init_static_serving(self, current_request, static_endpoint, static_serve_dir)
+
+        template_loc = self.templates_dir if not template_dir else template_dir
+        init_template_path(self, template_loc)
+
+        init_template_renderer(self)
+
+        return
 
     def run(self):
         run_simple(self.host, self.port, self, use_debugger=self.debug, use_reloader=self.debug)

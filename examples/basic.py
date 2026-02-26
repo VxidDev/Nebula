@@ -1,15 +1,12 @@
 from nebula import Nebula , Response, current_request
 
 from nebula.utils import (
-    jsonify, htmlify, init_static_serving , load_template , render_template , init_template_renderer , render_template_string,
-    init_template_path
+    jsonify, htmlify, load_template , render_template , render_template_string
 )
 
 app = Nebula(__file__ , "localhost", 8000, False)
 
-init_static_serving(app, "statics")
-init_template_path(app)
-init_template_renderer(app)
+app.init_all("statics")
 
 jinja_template = """
     <h1>{{ APP.host + ":" + APP.port|string }}</h1>

@@ -2,9 +2,8 @@ from werkzeug.utils import send_file
 from typing import Optional
 from pathlib import Path 
 from jinja2 import Environment , FileSystemLoader
-from ..server import current_request
 
-def init_static_serving(app, endpoint: str = "static", static_dir: Optional[str] = None) -> None:
+def init_static_serving(app, current_request , endpoint: str = "static", static_dir: Optional[str] = None) -> None:
     app.statics_dir = Path(app.module_name).resolve().parent / (static_dir if static_dir else "statics") 
         
     @app.route(f"/{endpoint}/<path>")
