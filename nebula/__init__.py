@@ -1,4 +1,4 @@
-from .server import Nebula
+from .server import Nebula , current_request
 from .exceptions import TemplateNotFound, InvalidMethod
 from .types import AVAILABLE_METHODS
 from werkzeug import Response
@@ -8,5 +8,6 @@ __all__ = [
     "TemplateNotFound",
     "InvalidMethod",
     "AVAILABLE_METHODS",
-    "Response"
+    "Response",
+    "current_request"
 ]
