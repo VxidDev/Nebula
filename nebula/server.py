@@ -56,10 +56,10 @@ class Nebula:
 
         self.jinja_env = None  # must be initialized via nebula.utils.init_template_renderer
 
-        # Socket.IO initialization (используем python-socketio напрямую)
+        # Socket.IO initialization
         self.sio = socketio.Server(cors_allowed_origins="*", async_mode="eventlet")
         
-        # Обработчики событий через декораторы
+        # Event handlers via decorators
         self._socketio_handlers = {}
 
     def init_all(self, static_endpoint: str = "static", static_dir: Optional[str] = None, template_dir: Optional[str] = None):
@@ -74,7 +74,7 @@ class Nebula:
         return
 
     def run(self, host=None, port=None, debug=None, **kwargs):
-        # Переопределяем параметры, если они переданы
+        # Updating parameters if they're passed
         if host is None:
             host = self.host
         if port is None:
@@ -82,10 +82,10 @@ class Nebula:
         if debug is None:
             debug = self.debug
 
-        # Создаём WSGIApp middleware для обработки Socket.IO запросов
+        # Creating WSGIApp middleware for handling Socket.IO requests
         app = socketio.WSGIApp(self.sio, self)
 
-        # Запускаем с eventlet
+        # running with eventlet
         from eventlet import wsgi
         import eventlet
         
@@ -145,7 +145,7 @@ class Nebula:
         return decorator
 
     def add_url_rule(self, rule: str, endpoint: str = None, view_func: Callable = None, **options):
-        """Добавляет правило URL для совместимости с Flask-SocketIO."""
+        """Adds URL rule for compatibility with Flask-SocketIO"""
         if endpoint is None:
             endpoint = view_func.__name__
         methods = options.get('methods', ['GET'])
@@ -182,7 +182,7 @@ class Nebula:
         return WerkzeugResponse(self.NOT_FOUND, status=404)
 
     def render_template(self, filename: str, **kwargs) -> WerkzeugResponse:
-        """Рендерит HTML шаблон с использованием Jinja2."""
+        """Renders HTML template with use of Jinja2"""
         return render_template(self, filename, **kwargs)
 
     def on_event(self, event: str) -> Callable:
@@ -207,13 +207,13 @@ class Nebula:
         return decorator
 
     def emit(self, event: str, data: Any = None, to: str = None, broadcast: bool = False):
-        """Отправляет событие через WebSocket."""
+        """Sends event via WebSocket"""
         if broadcast:
-            # Отправить всем подключенным клиентам
+            # Send to all connected clients
             self.sio.emit(event, data)
         elif to:
-            # Отправить конкретному клиенту
+            # Send to one, selected client.
             self.sio.emit(event, data, to=to)
         else:
-            # Отправить отправителю
+            # Send to sender 
             self.sio.emit(event, data)

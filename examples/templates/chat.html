@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Чат - Nebula</title>
+    <title>Chat - Nebula</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         * {
@@ -168,16 +168,16 @@
         </div>
 
         <div class="username-input">
-            <input type="text" id="username" placeholder="Ваше имя..." value="Гость">
+            <input type="text" id="username" placeholder="Your name..." value="Guest">
         </div>
 
-        <div class="status" id="status">Подключение...</div>
+        <div class="status" id="status">Connecting...</div>
 
         <div class="chat-messages" id="messages"></div>
 
         <div class="chat-input">
-            <input type="text" id="messageInput" placeholder="Введите сообщение..." autofocus>
-            <button onclick="sendMessage()">Отправить</button>
+            <input type="text" id="messageInput" placeholder="Enter message..." autofocus>
+            <button onclick="sendMessage()">Send</button>
         </div>
     </div>
 
@@ -189,12 +189,12 @@
         const statusDiv = document.getElementById('status');
 
         socket.on('connect', () => {
-            statusDiv.textContent = '✓ Подключено';
+            statusDiv.textContent = '✓ Connected';
             statusDiv.className = 'status connected';
         });
 
         socket.on('disconnect', () => {
-            statusDiv.textContent = '✗ Отключено';
+            statusDiv.textContent = '✗ Disconnected';
             statusDiv.className = 'status disconnected';
         });
 
@@ -204,7 +204,7 @@
 
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);
-            statusDiv.textContent = '✗ Ошибка подключения';
+            statusDiv.textContent = '✗ Connection Error';
             statusDiv.className = 'status disconnected';
         });
 
@@ -221,7 +221,7 @@
 
         function sendMessage() {
             const message = messageInput.value.trim();
-            const username = usernameInput.value.trim() || 'Аноним';
+            const username = usernameInput.value.trim() || 'Anon';
 
             if (message) {
                 socket.emit('message', { username, message });
@@ -245,7 +245,7 @@
             localStorage.setItem('chat_username', usernameInput.value);
         });
 
-        // Загрузка сохранённого имени
+        // Load saved username
         const savedUsername = localStorage.getItem('chat_username');
         if (savedUsername) {
             usernameInput.value = savedUsername;

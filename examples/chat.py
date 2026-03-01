@@ -1,13 +1,10 @@
 from nebula import Nebula
 from pathlib import Path
 
-app = Nebula(__name__, "127.0.0.1", 5000, debug=True)
+app = Nebula(__file__, "0.0.0.0", 5000, debug=True)
+app.init_all()
 
-# Указываем правильный путь к шаблонам
-template_dir = Path(__file__).parent / "templates"
-app.init_all(template_dir=str(template_dir))
-
-# Хранилище сообщений и подключенных клиентов
+# Storage for messages and connected clients
 messages = []
 clients = {}
 
@@ -21,7 +18,7 @@ def index():
 def handle_connect(sid, environ):
     print(f"Client connected: {sid}")
     clients[sid] = environ
-    return {"status": "connected", "messages": messages[-50:]}  # Последние 50 сообщений
+    return {"status": "connected", "messages": messages[-50:]}  # Last 50 messages
 
 
 @app.on_disconnect()
@@ -42,7 +39,7 @@ def handle_message(sid, data):
         if len(messages) > 100:
             messages.pop(0)
 
-        # Отправляем сообщение всем подключенным клиентам (включая отправителя)
+        # Send message to all connected clients (including sender)
         app.sio.emit("new_message", msg_data)
 
 
