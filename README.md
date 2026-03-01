@@ -113,7 +113,10 @@ python main.py
 Open your browser and navigate to `http://localhost:8000` to see your page.
 
 ## Contributions <3
-**amogus-gggy** - refactoring Nebula 0.2.0. Huge thank you!
+**amogus-gggy**: 
+- refactoring Nebula 0.2.0.
+- adding websockets support (2.0.0) <br>
+Huge thank you!
 
 ## License
 
