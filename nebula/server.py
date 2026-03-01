@@ -7,7 +7,9 @@ from werkzeug.wrappers import Request as WerkzeugRequest, Response as WerkzeugRe
 from werkzeug.serving import run_simple
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, MethodNotAllowed
+import socketio
 
+from .utils.render_template import render_template
 from .utils import init_static_serving , init_template_path , init_template_renderer
 
 from .types import (
@@ -54,6 +56,12 @@ class Nebula:
 
         self.jinja_env = None  # must be initialized via nebula.utils.init_template_renderer
 
+        # Socket.IO initialization
+        self.sio = socketio.Server(cors_allowed_origins="*", async_mode="eventlet")
+        
+        # Event handlers via decorators
+        self._socketio_handlers = {}
+
     def init_all(self, static_endpoint: str = "static", static_dir: Optional[str] = None, template_dir: Optional[str] = None):
         static_serve_dir = self.statics_dir if not static_dir else static_dir
         init_static_serving(self, current_request, static_endpoint, static_serve_dir)
@@ -65,8 +73,25 @@ class Nebula:
 
         return
 
-    def run(self):
-        run_simple(self.host, self.port, self, use_debugger=self.debug, use_reloader=self.debug)
+    def run(self, host=None, port=None, debug=None, **kwargs):
+        # Updating parameters if they're passed
+        if host is None:
+            host = self.host
+        if port is None:
+            port = self.port
+        if debug is None:
+            debug = self.debug
+
+        # Creating WSGIApp middleware for handling Socket.IO requests
+        app = socketio.WSGIApp(self.sio, self)
+
+        # running with eventlet
+        from eventlet import wsgi
+        import eventlet
+        
+        listener = eventlet.listen((host, port))
+        print(f"Starting Nebula server on http://{host}:{port}")
+        wsgi.server(listener, app, log_output=debug)
 
     def dispatch_request(self, request: WerkzeugRequest):
         _request_ctx_stack.request = request
@@ -112,12 +137,22 @@ class Nebula:
             for method in methods:
                 if method not in AVAILABLE_METHODS:
                     raise InvalidMethod(f"Method: '{method}' not recognized.")
-            
+
             rule = Rule(path, endpoint=endpoint, methods=methods)
             self.url_map.add(rule)
             self.view_functions[endpoint] = f
             return f
         return decorator
+
+    def add_url_rule(self, rule: str, endpoint: str = None, view_func: Callable = None, **options):
+        """Adds URL rule for compatibility with Flask-SocketIO"""
+        if endpoint is None:
+            endpoint = view_func.__name__
+        methods = options.get('methods', ['GET'])
+        new_rule = Rule(rule, endpoint=endpoint, methods=methods)
+        self.url_map.add(new_rule)
+        if view_func:
+            self.view_functions[endpoint] = view_func
 
     def before_request(self, func) -> Callable:
         self.exec_before_request = func
@@ -145,3 +180,40 @@ class Nebula:
 
     def content_not_found_handler(self) -> WerkzeugResponse:
         return WerkzeugResponse(self.NOT_FOUND, status=404)
+
+    def render_template(self, filename: str, **kwargs) -> WerkzeugResponse:
+        """Renders HTML template with use of Jinja2"""
+        return render_template(self, filename, **kwargs)
+
+    def on_event(self, event: str) -> Callable:
+        """Decorator to register a WebSocket event handler."""
+        def decorator(f: Callable) -> Callable:
+            self.sio.on(event)(f)
+            return f
+        return decorator
+
+    def on_connect(self) -> Callable:
+        """Decorator to register a WebSocket connect handler."""
+        def decorator(f: Callable) -> Callable:
+            self.sio.on('connect')(f)
+            return f
+        return decorator
+
+    def on_disconnect(self) -> Callable:
+        """Decorator to register a WebSocket disconnect handler."""
+        def decorator(f: Callable) -> Callable:
+            self.sio.on('disconnect')(f)
+            return f
+        return decorator
+
+    def emit(self, event: str, data: Any = None, to: str = None, broadcast: bool = False):
+        """Sends event via WebSocket"""
+        if broadcast:
+            # Send to all connected clients
+            self.sio.emit(event, data)
+        elif to:
+            # Send to one, selected client.
+            self.sio.emit(event, data, to=to)
+        else:
+            # Send to sender 
+            self.sio.emit(event, data)
