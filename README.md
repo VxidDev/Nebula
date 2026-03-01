@@ -12,6 +12,7 @@
 - **Template Loading**: Easily load and serve HTML templates from a designated directory.
 - **Statics Loading**: Easily load and serve files from designated directory.
 - **Middleware Support**: `before_request` and `after_request` hooks for flexible request handling.
+- **Flexible Error Handling**: Easily handle HTTP errors with use of `error_handler(<http_code)`.
 - **Easy to Use**: Get a server up and running in just a few lines of code.
 
 ## Installation

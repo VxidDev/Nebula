@@ -12,7 +12,9 @@ requires-python = ">=3.10"
 
 dependencies = [
     "werkzeug",
-    "jinja2"
+    "jinja2",
+    "python-socketio",
+    "eventlet"
 ]
 
 [tool.setuptools.packages.find]
