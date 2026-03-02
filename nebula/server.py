@@ -1,6 +1,7 @@
 from typing import Dict, List, Callable, Optional, Any
 from pathlib import Path
 import mimetypes
+import datetime
 
 from werkzeug.local import Local, LocalProxy
 from werkzeug.wrappers import Request as WerkzeugRequest, Response as WerkzeugResponse
@@ -62,6 +63,8 @@ class Nebula:
         # Event handlers via decorators
         self._socketio_handlers = {}
 
+        self.request_log_format = "[ {HTTP_CODE} - {TIME} ] {ENDPOINT}"
+
     def init_all(self, static_endpoint: str = "static", static_dir: Optional[str] = None, template_dir: Optional[str] = None):
         static_serve_dir = self.statics_dir if not static_dir else static_dir
         init_static_serving(self, current_request, static_endpoint, static_serve_dir)
@@ -105,6 +108,19 @@ class Nebula:
                     self.exec_before_request()
                 
                 response = self.view_functions[endpoint](**values)
+
+                # Log request
+                try:
+                    query = request.query_string.decode("utf-8")
+                    if query:
+                        path = f"{request.path}?{query}"
+                    else:
+                        path = request.path
+
+                    date = datetime.datetime.now()
+                    print(self.request_log_format.format(ENDPOINT=path , HTTP_CODE=response.status_code , TIME=date.strftime("%H:%M:%S") , DATE=date.strftime("%Y-%m-%d")))
+                except Exception as e:
+                    print(f"Invalid log format string! - {str(e)}")
 
                 # Execute after_request hook
                 if self.exec_after_request:
