@@ -63,4 +63,4 @@ def jinja():
 def jinja_string():
     return htmlify(render_template_string(app, jinja_template, APP=app))
 
-app.run()
+app.run(ssl_context=("localhost+2.pem", "localhost+2-key.pem"))

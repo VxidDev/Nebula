@@ -1,7 +1,12 @@
+import eventlet
+eventlet.monkey_patch(socket=True, thread=True)
+from eventlet import wsgi
+
 from typing import Dict, List, Callable, Optional, Any
 from pathlib import Path
 import mimetypes
 import datetime
+import ssl
 
 from werkzeug.local import Local, LocalProxy
 from werkzeug.wrappers import Request as WerkzeugRequest, Response as WerkzeugResponse
@@ -65,6 +70,8 @@ class Nebula:
 
         self.request_log_format = "[ {HTTP_CODE} - {TIME} ] {ENDPOINT}"
 
+        self._listener = None
+
     def init_all(self, static_endpoint: str = "static", static_dir: Optional[str] = None, template_dir: Optional[str] = None):
         static_serve_dir = self.statics_dir if not static_dir else static_dir
         init_static_serving(self, current_request, static_endpoint, static_serve_dir)
@@ -76,8 +83,7 @@ class Nebula:
 
         return
 
-    def run(self, host=None, port=None, debug=None, **kwargs):
-        # Updating parameters if they're passed
+    def run(self, host=None, port=None, debug=None, ssl_context=None, **kwargs):
         if host is None:
             host = self.host
         if port is None:
@@ -85,16 +91,45 @@ class Nebula:
         if debug is None:
             debug = self.debug
 
-        # Creating WSGIApp middleware for handling Socket.IO requests
         app = socketio.WSGIApp(self.sio, self)
 
-        # running with eventlet
-        from eventlet import wsgi
-        import eventlet
-        
-        listener = eventlet.listen((host, port))
-        print(f"Starting Nebula server on http://{host}:{port}")
-        wsgi.server(listener, app, log_output=debug)
+        self._listener = eventlet.listen((host, port))
+
+        if ssl_context:
+            if isinstance(ssl_context, tuple):
+                certfile, keyfile = ssl_context
+                self._listener = eventlet.wrap_ssl(
+                    self._listener,
+                    certfile=certfile,
+                    keyfile=keyfile,
+                    server_side=True
+                )
+            elif isinstance(ssl_context, ssl.SSLContext):
+                self._listener = eventlet.wrap_ssl(
+                    self._listener,
+                    server_side=True,
+                    ssl_context=ssl_context
+                )
+            else:
+                raise ValueError("ssl_context must be tuple or SSLContext")
+
+            print(f"Starting Nebula server on https://{host}:{port}")
+        else:
+            print(f"Starting Nebula server on http://{host}:{port}")
+
+        try:
+            wsgi.server(self._listener, app, log_output=debug)
+        except OSError:
+            # Server was stopped
+            pass
+
+    def stop(self):
+        """
+        Stops the eventlet server.
+        This must be called from a different thread than the one running the server.
+        """
+        if self._listener:
+            self._listener.close()
 
     def dispatch_request(self, request: WerkzeugRequest):
         _request_ctx_stack.request = request

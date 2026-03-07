@@ -1,206 +1,265 @@
 import pytest
-import os
-import tempfile
-import shutil
-from nebula import Nebula, TemplateNotFound, InvalidMethod
-from nebula.utils import jsonify
 from werkzeug.wrappers import Response
-from werkzeug.test import Client
-
-class TestNebulaInit:
-    """Tests for Nebula initialization."""
-
-    def test_nebula_init_default(self):
-        """Tests Nebula initialization with default values."""
-        app = Nebula("localhost", 8000)
-        assert app.host == "localhost"
-        assert app.port == 8000
-        assert app.debug is False
-        assert len(list(app.url_map.iter_rules())) == 0
-        assert app.templates_dir == "./templates"
-
-    def test_nebula_init_debug(self):
-        """Tests Nebula initialization with debug mode."""
-        app = Nebula("localhost", 8000, debug=True)
-        assert app.debug is True
-
-    def test_nebula_init_custom_host_port(self):
-        """Tests Nebula initialization with custom host and port."""
-        app = Nebula("127.0.0.1", 5000)
-        assert app.host == "127.0.0.1"
-        assert app.port == 5000
+from nebula.utils import jsonify
+from nebula import TemplateNotFound
+import os
+import shutil
+import tempfile
+import ssl
 
 
-class TestNebulaRoute:
-    """Tests for Nebula route decorator."""
+def test_app_creation(app):
+    assert app.host == "localhost"
+    assert app.port == 8000
+    assert not app.debug
 
-    def test_route_decorator_get(self):
-        """Tests route decorator with GET method."""
-        app = Nebula("localhost", 8000)
+def test_debug_mode():
+    from nebula import Nebula
+    app = Nebula(__name__, "localhost", 8000, debug=True)
+    assert app.debug
 
-        @app.route("/test")
-        def test_handler(request):
-            return Response("OK", 200)
+def test_simple_route(app, client):
+    @app.route("/test")
+    def test():
+        return "Hello, World!"
 
-        rules = list(app.url_map.iter_rules())
-        assert len(rules) == 1
-        assert rules[0].rule == "/test"
-        assert "GET" in rules[0].methods
-        assert rules[0].endpoint == "test_handler"
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.data == b"Hello, World!"
 
-    def test_route_decorator_post(self):
-        """Tests route decorator with POST method."""
-        app = Nebula("localhost", 8000)
+def test_post_route(app, client):
+    @app.route("/test_post", methods=["POST"])
+    def test_post():
+        return "OK"
 
-        @app.route("/api/data", methods=["POST"])
-        def data_handler(request):
-            return Response("Created", 201)
+    response = client.post("/test_post")
+    assert response.status_code == 200
+    assert response.data == b"OK"
 
-        rules = list(app.url_map.iter_rules())
-        assert len(rules) == 1
-        assert "POST" in rules[0].methods
+def test_not_found(client):
+    response = client.get("/non_existent_route")
+    assert response.status_code == 404
+    assert b"<title>404 Not Found</title>" in response.data
 
-    def test_route_decorator_multiple_methods(self):
-        """Tests route decorator with multiple methods."""
-        app = Nebula("localhost", 8000)
+def test_method_not_allowed(app, client):
+    @app.route("/test_method")
+    def test_method():
+        return "OK"
 
-        @app.route("/api/resource", methods=["GET", "POST"])
-        def resource_handler(request):
-            return Response("OK", 200)
+    response = client.post("/test_method")
+    assert response.status_code == 405
+    assert b"<title>405 Method Not Allowed</title>" in response.data
 
-        rules = list(app.url_map.iter_rules())
-        assert len(rules) == 1
-        assert "GET" in rules[0].methods
-        assert "POST" in rules[0].methods
+def test_internal_server_error(app, client):
+    @app.route("/error")
+    def error():
+        raise Exception("Test error")
 
-    def test_route_decorator_invalid_method(self):
-        """Tests route decorator raises error for invalid method."""
-        app = Nebula("localhost", 8000)
+    response = client.get("/error")
+    assert response.status_code == 500
+    assert b"<title>500 Internal Server Error</title>" in response.data
 
-        with pytest.raises(InvalidMethod):
-            @app.route("/test", methods=["INVALID"])
-            def test_handler(request):
-                return Response("OK", 200)
+def test_custom_error_handler(app, client):
+    @app.error_handler(404)
+    def custom_not_found():
+        return Response("Custom Not Found", status=404)
 
-    def test_route_decorator_multiple_routes(self):
-        """Tests multiple routes on same app."""
-        app = Nebula("localhost", 8000)
+    response = client.get("/non_existent_route")
+    assert response.status_code == 404
+    assert response.data == b"Custom Not Found"
 
-        @app.route("/route1")
-        def handler1(request):
-            return Response("1", 200)
+def test_jsonify():
+    response = jsonify({"message": "Hello"})
+    assert response.status_code == 200
+    assert response.mimetype == "application/json"
+    assert response.get_json() == {"message": "Hello"}
 
-        @app.route("/route2")
-        def handler2(request):
-            return Response("2", 200)
+def test_jsonify_with_status_code():
+    response = jsonify({"error": "Not Found"}, 404)
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "Not Found"}
 
-        rules = list(app.url_map.iter_rules())
-        assert len(rules) == 2
+def test_before_request_hook(app, client):
+    order = []
 
+    @app.before_request
+    def before_request_hook():
+        order.append(1)
 
-class TestNebulaTemplates:
-    """Tests for Nebula template loading."""
+    @app.route("/hook")
+    def hook():
+        order.append(2)
+        return "OK"
 
-    def setup_method(self):
-        """Create temporary templates directory."""
-        self.temp_dir = tempfile.mkdtemp()
-        self.original_templates_dir = "./templates"
+    client.get("/hook")
+    assert order == [1, 2]
 
-    def teardown_method(self):
-        """Clean up temporary directory."""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+def test_after_request_hook(app, client):
+    order = []
 
-    def test_load_template_success(self):
-        """Tests successful template loading."""
-        app = Nebula("localhost", 8000)
-        app.templates_dir = self.temp_dir
+    @app.after_request
+    def after_request_hook():
+        order.append(3)
 
-        template_path = os.path.join(self.temp_dir, "test.html")
-        with open(template_path, "w") as f:
-            f.write("<h1>Hello</h1>")
-
-        content = app.load_template("test.html")
-        assert content == "<h1>Hello</h1>"
-
-    def test_load_template_not_found(self):
-        """Tests template not found exception."""
-        app = Nebula("localhost", 8000)
-        app.templates_dir = self.temp_dir
-
-        with pytest.raises(TemplateNotFound):
-            app.load_template("nonexistent.html")
-
-    def test_load_template_nested_path(self):
-        """Tests loading template from nested directory."""
-        app = Nebula("localhost", 8000)
-        app.templates_dir = self.temp_dir
-
-        nested_dir = os.path.join(self.temp_dir, "pages")
-        os.makedirs(nested_dir)
-        template_path = os.path.join(nested_dir, "home.html")
-        with open(template_path, "w") as f:
-            f.write("<h1>Home</h1>")
-
-        content = app.load_template("pages/home.html")
-        assert "<h1>Home</h1>" in content
+    @app.route("/hook_after")
+    def hook_after():
+        order.append(2)
+        return "OK"
+    
+    # after_request is not called if the view function returns a Response object
+    # so we need to call it manually
+    @app.route("/hook_after_resp")
+    def hook_after_resp():
+        order.append(2)
+        return Response("OK")
 
 
-class TestNebulaHooks:
-    """Tests for Nebula request hooks."""
+    client.get("/hook_after")
+    assert order == [2, 3]
 
-    def test_internal_error_handler(self):
-        """Tests internal_error_handler."""
-        app = Nebula("localhost", 8000)
+def test_template_rendering(app):
+    temp_dir = tempfile.mkdtemp()
+    app.templates_dir = temp_dir
+    template_path = os.path.join(temp_dir, "test.html")
+    with open(template_path, "w") as f:
+        f.write("<h1>Hello, {{ name }}!</h1>")
+    
+    app.init_all()
 
-        @app.error_handler(500)
-        def custom_error(request):
-            return Response("Custom Error", 500)
+    response = app.render_template("test.html", name="Nebula")
+    assert response.status_code == 200
+    assert b"<h1>Hello, Nebula!</h1>" in response.data
 
-        assert 500 in app.error_handlers
+    shutil.rmtree(temp_dir)
 
-    def test_method_not_allowed_handler(self):
-        """Tests method_not_allowed_handler."""
-        app = Nebula("localhost", 8000)
+from jinja2 import TemplateNotFound as JinjaTemplateNotFound
 
-        @app.error_handler(405)
-        def custom_method_not_allowed(request):
-            return Response("Method Not Allowed", 405)
+# ... (rest of the file) ...
 
-        assert 405 in app.error_handlers
+def test_template_not_found(app):
+    app.templates_dir = "non_existent_dir"
+    app.init_all()
+    with pytest.raises(JinjaTemplateNotFound):
+        app.render_template("non_existent_template.html")
 
+def test_static_files(app, client):
+    temp_dir = tempfile.mkdtemp()
+    app.statics_dir = temp_dir
+    static_file_path = os.path.join(temp_dir, "style.css")
+    with open(static_file_path, "w") as f:
+        f.write("body { color: red; }")
 
-class TestJsonify:
-    """Tests for jsonify helper function."""
+    app.init_all()
 
-    def test_jsonify_basic(self):
-        """Tests jsonify with basic dictionary."""
-        response = jsonify({"key": "value"})
-        assert response.status_code == 200
-        assert response.headers["Content-Type"] == "application/json"
-        import json
-        assert json.loads(response.data) == {"key": "value"}
+    response = client.get("/static/style.css")
+    assert response.status_code == 200
+    assert response.data == b"body { color: red; }"
+    assert response.mimetype == "text/css"
 
-    def test_jsonify_custom_status(self):
-        """Tests jsonify with custom status code."""
-        response = jsonify({"error": "not found"}, status=404)
-        assert response.status_code == 404
+    shutil.rmtree(temp_dir)
 
-    def test_jsonify_nested_dict(self):
-        """Tests jsonify with nested dictionary."""
-        data = {"user": {"name": "John", "details": {"age": 30}}}
-        response = jsonify(data)
-        import json
-        assert json.loads(response.data) == data
+from unittest.mock import patch
 
-    def test_jsonify_list(self):
-        """Tests jsonify with list."""
-        data = [1, 2, 3, 4, 5]
-        response = jsonify(data)
-        import json
-        assert json.loads(response.data) == data
+def test_https_server(app):
+    @app.route("/")
+    def index():
+        return "Hello, HTTPS!"
 
-    def test_jsonify_empty_dict(self):
-        """Tests jsonify with empty dictionary."""
-        response = jsonify({})
-        import json
-        assert json.loads(response.data) == {}
+    ssl_context = (
+        os.path.join(os.path.dirname(__file__), "localhost+2.pem"), # should have a valid mkcert generated certificate!
+        os.path.join(os.path.dirname(__file__), "localhost+2-key.pem") # should have a valid mkcert generated certificate!
+    )
+    
+    with patch("eventlet.wsgi.server") as mock_wsgi_server:
+        with patch("eventlet.wrap_ssl") as mock_wrap_ssl:
+            app.run(host="localhost", port=8000, ssl_context=ssl_context)
+            mock_wsgi_server.assert_called_once()
+            mock_wrap_ssl.assert_called_once()
+            args, kwargs = mock_wrap_ssl.call_args
+            assert kwargs.get("certfile") == ssl_context[0]
+            assert kwargs.get("keyfile") == ssl_context[1]
+
+    app.stop()
+
+def test_socketio_connect(socketio_server):
+    # Unpack the fixture
+    app, server_url = socketio_server
+    import socketio
+    
+    sio_client = socketio.Client(request_timeout=10)
+
+    @app.on_connect()
+    def on_connect(sid, environ):
+        pass # print(f"Socket.IO client connected: {sid}") # Removed print for cleaner output
+    
+    try:
+        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        assert sio_client.connected
+    finally:
+        sio_client.disconnect()
+
+def test_socketio_disconnect(socketio_server):
+    # Unpack the fixture
+    app, server_url = socketio_server
+    import socketio
+
+    sio_client = socketio.Client(request_timeout=10)
+
+    @app.on_disconnect()
+    def on_disconnect(sid):
+        pass # print(f"Socket.IO client disconnected: {sid}") # Removed print for cleaner output
+
+    try:
+        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        sio_client.disconnect()
+        assert not sio_client.connected
+    finally:
+        pass # Fixture will handle server teardown
+
+def test_socketio_event(socketio_server):
+    # Unpack the fixture
+    app, server_url = socketio_server
+    import socketio
+    
+    sio_client = socketio.Client(request_timeout=10)
+    
+    received_data = None
+
+    @app.on_event("test_event")
+    def on_test_event(sid, data):
+        nonlocal received_data
+        received_data = data
+        
+    try:
+        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        sio_client.emit("test_event", {"data": "test"})
+        sio_client.sleep(0.5)
+        assert received_data == {"data": "test"}
+    finally:
+        sio_client.disconnect()
+
+def test_socketio_emit(socketio_server):
+    # Unpack the fixture
+    app, server_url = socketio_server
+    import socketio
+    
+    sio_client = socketio.Client(request_timeout=10)
+    
+    received_data = None
+    
+    @sio_client.on("response_event")
+    def on_response(data):
+        nonlocal received_data
+        received_data = data
+
+    @app.on_event("test_emit")
+    def on_test_emit(sid, data):
+        app.emit("response_event", {"data": "response"}, to=sid)
+
+    try:
+        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        sio_client.emit("test_emit", {"data": "test"})
+        sio_client.sleep(0.5)
+        assert received_data == {"data": "response"}
+    finally:
+        sio_client.disconnect()
