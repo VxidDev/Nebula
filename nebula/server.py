@@ -68,7 +68,7 @@ class Nebula:
         # Event handlers via decorators
         self._socketio_handlers = {}
 
-        self.request_log_format = "[ {HTTP_CODE} - {TIME} ] {ENDPOINT}"
+        self.request_log_format = "[ {HTTP_CODE} - {TIME} ] {ENDPOINT} ({METHOD})"
 
         self._listener = None
 
@@ -153,7 +153,7 @@ class Nebula:
                         path = request.path
 
                     date = datetime.datetime.now()
-                    print(self.request_log_format.format(ENDPOINT=path , HTTP_CODE=response.status_code , TIME=date.strftime("%H:%M:%S") , DATE=date.strftime("%Y-%m-%d")))
+                    print(self.request_log_format.format(ENDPOINT=path , HTTP_CODE=response.status_code , TIME=date.strftime("%H:%M:%S") , DATE=date.strftime("%Y-%m-%d") , METHOD=request.method))
                 except Exception as e:
                     print(f"Invalid log format string! - {str(e)}")
 
