@@ -156,7 +156,8 @@ def test_static_files(app, client):
     assert response.data == b"body { color: red; }"
     assert response.mimetype == "text/css"
 
-    shutil.rmtree(temp_dir)
+    # Windows keeps file handles open after send_file; ignore cleanup errors
+    shutil.rmtree(temp_dir, ignore_errors=True)
 
 from unittest.mock import patch
 
@@ -193,7 +194,7 @@ def test_socketio_connect(socketio_server):
         pass # print(f"Socket.IO client connected: {sid}") # Removed print for cleaner output
     
     try:
-        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        sio_client.connect(server_url, transports=["polling"], wait=True, wait_timeout=10)
         assert sio_client.connected
     finally:
         sio_client.disconnect()
@@ -210,7 +211,7 @@ def test_socketio_disconnect(socketio_server):
         pass # print(f"Socket.IO client disconnected: {sid}") # Removed print for cleaner output
 
     try:
-        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        sio_client.connect(server_url, transports=["polling"], wait=True, wait_timeout=10)
         sio_client.disconnect()
         assert not sio_client.connected
     finally:
@@ -220,18 +221,18 @@ def test_socketio_event(socketio_server):
     # Unpack the fixture
     app, server_url = socketio_server
     import socketio
-    
+
     sio_client = socketio.Client(request_timeout=10)
-    
+
     received_data = None
 
     @app.on_event("test_event")
     def on_test_event(sid, data):
         nonlocal received_data
         received_data = data
-        
+
     try:
-        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        sio_client.connect(server_url, transports=["polling"], wait=True, wait_timeout=10)
         sio_client.emit("test_event", {"data": "test"})
         sio_client.sleep(0.5)
         assert received_data == {"data": "test"}
@@ -242,11 +243,11 @@ def test_socketio_emit(socketio_server):
     # Unpack the fixture
     app, server_url = socketio_server
     import socketio
-    
+
     sio_client = socketio.Client(request_timeout=10)
-    
+
     received_data = None
-    
+
     @sio_client.on("response_event")
     def on_response(data):
         nonlocal received_data
@@ -257,7 +258,7 @@ def test_socketio_emit(socketio_server):
         app.emit("response_event", {"data": "response"}, to=sid)
 
     try:
-        sio_client.connect(server_url, wait=True, wait_timeout=10)
+        sio_client.connect(server_url, transports=["polling"], wait=True, wait_timeout=10)
         sio_client.emit("test_emit", {"data": "test"})
         sio_client.sleep(0.5)
         assert received_data == {"data": "response"}
