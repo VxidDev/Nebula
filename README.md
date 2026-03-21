@@ -102,12 +102,15 @@ def jinja():
 def jinja_string():
     return htmlify(render_template_string(app, jinja_template, APP=app))
 
-app.run()
+wsgi = app.wsgi_app
+
+if __name__ == "__main__":
+    app.run(ssl_context=("localhost+2.pem", "localhost+2-key.pem")) # ssl is optional.
 ```
 
 **Run your app**:
 ```bash
-python main.py
+gunicorn -w 1 -k eventlet "main:wsgi"
 ```
 
 Open your browser and navigate to `http://localhost:8000` to see your page.

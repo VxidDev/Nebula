@@ -192,9 +192,6 @@ class Nebula:
         return socketio.WSGIApp(self.sio, self)
 
     def run(self, host=None, port=None, debug=None, ssl_context=None, **kwargs):
-        # eventlet monkey-patching must happen before any network I/O
-        eventlet.monkey_patch()
-
         if host is None:
             host = self.host
         if port is None:

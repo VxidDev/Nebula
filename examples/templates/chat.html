@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat - Nebula</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -161,6 +162,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="chat-container">
         <div class="chat-header">
@@ -176,7 +178,7 @@
         <div class="chat-messages" id="messages"></div>
 
         <div class="chat-input">
-            <input type="text" id="messageInput" placeholder="Enter message..." autofocus>
+            <input type="text" id="messageInput" placeholder="Type a message..." autofocus>
             <button onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -221,7 +223,7 @@
 
         function sendMessage() {
             const message = messageInput.value.trim();
-            const username = usernameInput.value.trim() || 'Anon';
+            const username = usernameInput.value.trim() || 'Anonymous';
 
             if (message) {
                 socket.emit('message', { username, message });

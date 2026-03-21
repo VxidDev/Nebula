@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 from nebula import Nebula , Response, current_request
 
 from nebula.utils import (
@@ -63,4 +66,7 @@ def jinja():
 def jinja_string():
     return htmlify(render_template_string(app, jinja_template, APP=app))
 
-app.run(ssl_context=("localhost+2.pem", "localhost+2-key.pem"))
+wsgi = app.wsgi_app
+
+if __name__ == "__main__":
+    app.run(ssl_context=("localhost+2.pem", "localhost+2-key.pem"))

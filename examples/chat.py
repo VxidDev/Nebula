@@ -42,6 +42,7 @@ def handle_message(sid, data):
         # Send message to all connected clients (including sender)
         app.sio.emit("new_message", msg_data)
 
+wsgi = app.wsgi_app
 
 if __name__ == "__main__":
     app.run()
