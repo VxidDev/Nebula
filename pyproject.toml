@@ -1,6 +1,6 @@
 [project]
 name = "nebula-core"
-version = "2.1.1"
+version = "2.2.0"
 description = "Nebula is a lightweight Python backend framework with middleware and routing, built on top of the werkzeug. It allows you to create web applications quickly with simple, decorator-based routing."
 readme = "README.md"
 license = {text = "MIT"}
