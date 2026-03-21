@@ -147,5 +147,7 @@ def on_message(sid, data):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+wsgi = app.wsgi_app
+
 if __name__ == "__main__":
     app.run()
