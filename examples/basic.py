@@ -1,6 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
-
 from nebula import Nebula , Response, current_request
 
 from nebula.utils import (
