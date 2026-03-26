@@ -4,3 +4,6 @@ class TemplateNotFound(BaseException):
 
 class InvalidMethod(BaseException):
     pass
+
+class DuplicateEndpoint(BaseException):
+    pass

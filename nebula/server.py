@@ -25,7 +25,7 @@ from .types import (
     DEFAULT_500_BODY,
     DEFAULT_405_BODY,
 )
-from .exceptions import InvalidMethod, TemplateNotFound
+from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint
 from .session import (
     SecureCookieSessionManager,
     AnonymousUser,
@@ -66,7 +66,7 @@ class Nebula:
 
         self.jinja_env = None  # must be initialized via nebula.utils.init_template_renderer
 
-        # Socket.IO — eventlet mode for proper WebSocket support
+        # Socket.IO - eventlet mode for proper WebSocket support
         self.sio = socketio.Server(cors_allowed_origins="*", async_mode="eventlet")
 
         self._socketio_handlers = {}
@@ -318,16 +318,23 @@ class Nebula:
     # Routing
     # ------------------------------------------------------------------
 
-    def route(self, path: str, methods: List[str] = ["GET"]) -> Callable:
+    def route(self, path: str, methods: List[str] = None, endpoint: str = None) -> Callable:
         def decorator(f):
-            endpoint = f.__name__
-            for method in methods:
+            ep: str = f.__name__ if endpoint is None else endpoint
+            mds: list[str] = methods or ["GET"]
+
+            for method in mds:
                 if method not in AVAILABLE_METHODS:
                     raise InvalidMethod(f"Method: '{method}' not recognized.")
 
-            rule = Rule(path, endpoint=endpoint, methods=methods)
+            if ep in self.view_functions:
+                raise DuplicateEndpoint(f"Endpoint '{ep}' already exists")
+
+            rule = Rule(path, endpoint=ep, methods=mds)
+
             self.url_map.add(rule)
-            self.view_functions[endpoint] = f
+            self.view_functions[ep] = f
+
             return f
 
         return decorator
