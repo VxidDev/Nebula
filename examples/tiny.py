@@ -1,10 +1,10 @@
-from nebula import Nebula
+from nebula import Nebula , run_dev
 from nebula.utils import htmlify
 
 app = Nebula(__file__, "localhost", 8000)
 
-@app.route("/", endpoint="main")
-def root() -> None:
+@app.route("/")
+async def root(request) -> None:
     return htmlify("<h1>Welcome to Nebula!</h1>")
 
-main = app.wsgi_app # gunicorn -w 1 -k eventlet tiny:main
+run_dev(app)

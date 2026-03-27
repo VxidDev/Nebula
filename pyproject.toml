@@ -1,7 +1,7 @@
 [project]
 name = "nebula-core"
-version = "2.2.0"
-description = "Nebula is a lightweight Python backend framework with middleware and routing, built on top of the werkzeug. It allows you to create web applications quickly with simple, decorator-based routing."
+version = "3.0.0"
+description = "Nebula is a lightweight ASGI-based Python web framework that provides simple, decorator-based routing and middleware support for building fast, asynchronous web applications."
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -13,10 +13,9 @@ authors = [
 requires-python = ">=3.10,<3.13"
 
 dependencies = [
-    "werkzeug",
     "jinja2",
-    "python-socketio",
-    "eventlet"
+    "python-socketio[asgi]",
+    "uvicorn"
 ]
 
 [tool.setuptools.packages.find]

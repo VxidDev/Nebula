@@ -1,26 +1,16 @@
-"""
-WebSocket chat with session-based authentication.
-
-Run:
-    python examples/chat_auth.py
-
-    # Or with a production WSGI server (eventlet worker):
-    gunicorn -w 1 -k eventlet "examples.chat_auth:app.wsgi_app"
-
-Test accounts: alice / password  |  bob / secret
-"""
-
 import datetime
 
-from nebula import Nebula, current_user, login_user, logout_user, login_required, UserMixin
+from nebula import Nebula
 from nebula.utils import jsonify
-from werkzeug.utils import redirect
-from werkzeug.wrappers import Response
+from nebula.request import Request
+from nebula.response import HTMLResponse, RedirectResponse
+from nebula.session import SecureCookieSessionManager, UserMixin, AnonymousUser
+from nebula.server import run_dev
 
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 
-app = Nebula(__file__, "0.0.0.0", 5000, debug=True)
+app = Nebula(__file__, host="0.0.0.0" , port=5000 , debug=True)
 app.init_all()
 app.setup_sessions(secret_key="change-me-in-production", max_age=3600)
 
@@ -41,7 +31,7 @@ USERS = {
 
 
 @app.user_loader
-def load_user(user_id: str):
+async def load_user(user_id: str):
     if user_id in USERS:
         return User(user_id)
     return None
@@ -62,73 +52,81 @@ def _now() -> str:
 # ── HTTP routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
-def index():
-    return redirect("/chat")
+async def index(request):
+    return RedirectResponse("/chat")
 
 
 @app.route("/login", methods=["GET", "POST"])
-def login():
-    from nebula.server import current_request
+async def login(request: Request):
+    if request.user.is_authenticated:
+        return RedirectResponse("/chat")
 
-    if current_user.is_authenticated:
-        return redirect("/chat")
-
-    if current_request.method == "POST":
-        username = current_request.form.get("username", "").strip()
-        password = current_request.form.get("password", "")
+    if request.method == "POST":
+        form = await request.form()
+        username = form.get("username", "")[0].strip()
+        password = form.get("password", "")[0]
 
         if USERS.get(username) == password:
-            login_user(User(username))
-            return redirect("/chat")
+            request.session[SecureCookieSessionManager._USER_ID_KEY] = User(username).get_id()
+            return RedirectResponse("/chat")
 
-        return app.render_template("login.html", error="Неверное имя пользователя или пароль")
+        return await app.render_template("login.html", error="Неверное имя пользователя или пароль")
 
-    return app.render_template("login.html", error=None)
+    return await app.render_template("login.html", error=None)
 
 
 @app.route("/logout")
-def logout():
-    logout_user()
-    return redirect("/login")
+async def logout(request: Request):
+    if SecureCookieSessionManager._USER_ID_KEY in request.session:
+        request.session.pop(SecureCookieSessionManager._USER_ID_KEY)
+    return RedirectResponse("/login")
 
 
 @app.route("/chat")
-@login_required(redirect_to="/login")
-def chat():
-    return app.render_template("chat_auth.html", username=current_user.username)
+async def chat(request: Request):
+    if not request.user.is_authenticated:
+        return RedirectResponse("/login")
+    return await app.render_template("chat_auth.html", username=request.user.username)
 
 
 # ── Socket.IO events ──────────────────────────────────────────────────────────
 
 @app.on_connect()
-def on_connect(sid, environ):
-    session = app.get_session_from_environ(environ)
-    username = session.get("_user_id")
+async def on_connect(sid, environ):
+    scope = environ["asgi.scope"]
 
-    if not username or username not in USERS:
-        # Reject unauthenticated WebSocket connections
-        return False
+    request = Request(scope, None, None)
 
-    connected_users[sid] = username
-    print(f"[WS] {username} connected ({sid})")
+    session = None
+    user = AnonymousUser()
 
-    # Send message history to the new client
-    app.sio.emit("history", history[-50:], to=sid)
+    if app._session_manager:
+        session = app._session_manager.open_session(request)
 
-    # Notify others
-    app.sio.emit("user_joined", {"username": username}, skip_sid=sid)
+        if app._user_loader and SecureCookieSessionManager._USER_ID_KEY in session:
+            loaded = await app._user_loader(session[SecureCookieSessionManager._USER_ID_KEY])
+            if loaded:
+                user = loaded
 
+    if user.is_authenticated:
+        connected_users[sid] = user.username
+        print(f"[WS] Authenticated {user.username} ({sid})")
+    else:
+        print(f"[WS] Anonymous connection ({sid})")
+
+    await app.sio.emit("history", history[-50:], to=sid)
 
 @app.on_disconnect()
-def on_disconnect(sid):
+async def on_disconnect(sid):
     username = connected_users.pop(sid, None)
     if username:
         print(f"[WS] {username} disconnected ({sid})")
-        app.sio.emit("user_left", {"username": username})
+        await app.sio.emit("user_left", {"username": username})
 
 
 @app.on_event("message")
-def on_message(sid, data):
+async def on_message(sid, data):
+    print("[WS] Sending message...")
     username = connected_users.get(sid)
     if not username:
         return
@@ -139,15 +137,14 @@ def on_message(sid, data):
 
     msg = {"username": username, "message": text, "time": _now()}
     history.append(msg)
+
     if len(history) > 100:
         history.pop(0)
 
-    app.sio.emit("new_message", msg)
+    await app.sio.emit("new_message", msg)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-wsgi = app.wsgi_app
-
 if __name__ == "__main__":
-    app.run()
+    run_dev(app, host="0.0.0.0" , port=5000)

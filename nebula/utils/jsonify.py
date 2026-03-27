@@ -1,9 +1,14 @@
-from werkzeug.wrappers import Response
-import json
+from ..response import JSONResponse
+import warnings 
 
-def jsonify(dictionary: dict, status: int = 200) -> Response:
-    return Response(
-        json.dumps(dictionary),
-        status=status,
-        mimetype='application/json'
+def jsonify(dictionary: dict, status: int = 200) -> JSONResponse: # deprecated
+    warnings.warn(
+        f"jsonify utility is deprecated.",
+        category=DeprecationWarning,
+        stacklevel=2
+    )
+
+    return JSONResponse(
+        dictionary,
+        status_code=status,
     )

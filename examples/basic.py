@@ -1,4 +1,5 @@
-from nebula import Nebula , Response, current_request
+from nebula import Nebula, run_dev
+from nebula.response import Response
 
 from nebula.utils import (
     jsonify, htmlify, load_template , render_template , render_template_string
@@ -13,20 +14,20 @@ jinja_template = """
 """
 
 @app.route("/" , methods=["GET" , "POST"])
-def main():
-    if current_request.method == "POST":    
-        data = current_request.get_json()
+async def main(request):
+    if request.method == "POST":    
+        data = await request.json()
 
         return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
 
-    return render_template(app, "test.html")
+    return await render_template(app, "test.html")
 
-@app.route("/greet/<name>")
-def greet(name):
+@app.route("/greet/{name}")
+def greet(request, name):
     return htmlify(f"<h1>Hi, {name}!</h1>")
 
 @app.route("/fruits")
-def jsonTest():
+def jsonTest(request):
     return jsonify({
         "fruits": {
             "apples": 6,
@@ -36,34 +37,34 @@ def jsonTest():
     })
 
 @app.error_handler(405)
-def method_not_allowed():
-    return htmlify("<h1>Cant do that :[</h1>", 405)
+async def method_not_allowed(scope, receive, send):
+    await htmlify("<h1>Cant do that :[</h1>", 405)(scope, receive, send)
 
 @app.error_handler(404)
-def not_found():
-    return htmlify("<h1>Cant find that :(</h1>", 404)
+async def not_found(scope, receive, send):
+    await htmlify("<h1>Cant find that :(</h1>", 404)(scope, receive, send)
 
 @app.error_handler(500)
-def doesnt_work():
-    return htmlify("<h1>Internal Error!</h1>", 500)
+async def doesnt_work(scope, receive, send):
+    await htmlify("<h1>Internal Error!</h1>", 500)(scope, receive, send)
 
 @app.route("/internal-error")
-def error():
-    return Response(f"Error!", 500)
+async def error(request):
+    await Response(f"Error!", 500)
 
 @app.route("/api", methods=["POST"])
-def api():
-    return jsonify({"a": 1, "b": 2, "c": 3}[current_request.get_json().get("item", "a")])
+async def api(request):
+    json = await request.json()
+    return jsonify({"a": 1, "b": 2, "c": 3}[json.get("item", "a")])
 
 @app.route("/jinja")
-def jinja():
-    return render_template(app, "jinja_template.html", APP=app)
+async def jinja(request):
+    return await render_template(app, "jinja_template.html", APP=app)
 
 @app.route("/jinja/string")
-def jinja_string():
-    return htmlify(render_template_string(app, jinja_template, APP=app))
-
-wsgi = app.wsgi_app
+async def jinja_string(request):
+    string = await render_template_string(app, jinja_template, APP=app)
+    return htmlify(string)
 
 if __name__ == "__main__":
-    app.run(ssl_context=("localhost+2.pem", "localhost+2-key.pem"))
+    run_dev(app, "localhost", 8000)

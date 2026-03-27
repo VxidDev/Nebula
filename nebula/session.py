@@ -2,16 +2,10 @@ import json
 import hmac
 import hashlib
 import base64
-from functools import wraps
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Callable, Dict, List
+from nebula.request import Request
+from nebula.response import Response
 
-from werkzeug.local import Local, LocalProxy
-from werkzeug.wrappers import Response as WerkzeugResponse
-
-
-_session_ctx = Local()
-current_session: "Session" = LocalProxy(lambda: _session_ctx.session)
-current_user: "UserMixin | AnonymousUser" = LocalProxy(lambda: _session_ctx.user)
 
 
 class Session(dict):
@@ -133,85 +127,17 @@ class SecureCookieSessionManager:
                 return session
         return Session()
 
-    def open_session_from_environ(self, environ: dict) -> Session:
-        """Parse session from a raw WSGI environ (e.g. inside Socket.IO handlers)."""
-        from http.cookies import SimpleCookie
-
-        raw_cookie = environ.get("HTTP_COOKIE", "")
-        if raw_cookie:
-            jar = SimpleCookie()
-            jar.load(raw_cookie)
-            morsel = jar.get(self.cookie_name)
-            if morsel:
-                session = self._decode_cookie(morsel.value)
-                if session is not None:
-                    return session
-        return Session()
-
-    def save_session(self, session: Session, response: WerkzeugResponse) -> None:
+    def save_session(self, session: Session, response: Response) -> None:
         payload = (
             base64.urlsafe_b64encode(json.dumps(dict(session)).encode())
             .decode()
             .rstrip("=")
         )
         signed = self._sign(payload)
-        response.set_cookie(
-            self.cookie_name,
-            signed,
-            max_age=self.max_age,
-            httponly=True,
-            samesite="Lax",
-            secure=self.secure,
+        response.headers["set-cookie"] = (
+            f"{self.cookie_name}={signed}; Path=/; Max-Age={self.max_age}; HttpOnly;"
+            f"{' Secure;' if self.secure else ''} SameSite=Lax"
         )
 
 
-def login_user(user) -> None:
-    """Store the user's ID in the current session.
 
-    Usage::
-
-        @app.route("/login", methods=["POST"])
-        def login():
-            user = User.get_by_credentials(...)
-            if user:
-                login_user(user)
-                return redirect("/dashboard")
-    """
-    current_session[SecureCookieSessionManager._USER_ID_KEY] = user.get_id()
-
-
-def logout_user() -> None:
-    """Remove the current user from the session.
-
-    Usage::
-
-        @app.route("/logout")
-        def logout():
-            logout_user()
-            return redirect("/login")
-    """
-    current_session.pop(SecureCookieSessionManager._USER_ID_KEY, None)
-
-
-def login_required(redirect_to: str = "/login") -> Callable:
-    """Decorator that redirects unauthenticated users to the login page.
-
-    Usage::
-
-        @app.route("/dashboard")
-        @login_required(redirect_to="/login")
-        def dashboard():
-            return f"Hello, {current_user.name}!"
-    """
-
-    def decorator(f: Callable) -> Callable:
-        @wraps(f)
-        def wrapped(*args, **kwargs):
-            if not current_user.is_authenticated:
-                from werkzeug.utils import redirect as werkzeug_redirect
-                return werkzeug_redirect(redirect_to)
-            return f(*args, **kwargs)
-
-        return wrapped
-
-    return decorator

@@ -1,5 +1,6 @@
 from nebula import Nebula
-from pathlib import Path
+from nebula.request import Request
+from nebula.server import run_dev
 
 app = Nebula(__file__, "0.0.0.0", 5000, debug=True)
 app.init_all()
@@ -10,26 +11,28 @@ clients = {}
 
 
 @app.route("/")
-def index():
-    return app.render_template("chat.html")
+async def index(request: Request):
+    return await app.render_template("chat.html")
 
 
 @app.on_connect()
-def handle_connect(sid, environ):
+async def handle_connect(sid, *args, **kwargs):
     print(f"Client connected: {sid}")
-    clients[sid] = environ
-    return {"status": "connected", "messages": messages[-50:]}  # Last 50 messages
+    clients[sid] = {} # Store client info if needed
+    # The return value is not directly sent as HTTP response in ASGI,
+    # but the client can receive initial messages via emit.
+    await app.sio.emit("initial_messages", messages[-50:], to=sid)
 
 
 @app.on_disconnect()
-def handle_disconnect(sid):
+async def handle_disconnect(sid):
     print(f"Client disconnected: {sid}")
     if sid in clients:
         del clients[sid]
 
 
 @app.on_event("message")
-def handle_message(sid, data):
+async def handle_message(sid, data):
     username = data.get("username", "Аноним")
     message = data.get("message", "")
 
@@ -39,10 +42,7 @@ def handle_message(sid, data):
         if len(messages) > 100:
             messages.pop(0)
 
-        # Send message to all connected clients (including sender)
-        app.sio.emit("new_message", msg_data)
-
-wsgi = app.wsgi_app
+        await app.sio.emit("new_message", msg_data)
 
 if __name__ == "__main__":
-    app.run()
+    run_dev(app, host="0.0.0.0", port=5000)
