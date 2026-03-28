@@ -1,6 +1,6 @@
 [project]
 name = "nebula-core"
-version = "3.0.0"
+version = "3.1.0"
 description = "Nebula is a lightweight ASGI-based Python web framework that provides simple, decorator-based routing and middleware support for building fast, asynchronous web applications."
 readme = "README.md"
 license = {text = "MIT"}
@@ -15,7 +15,8 @@ requires-python = ">=3.10,<3.13"
 dependencies = [
     "jinja2",
     "python-socketio[asgi]",
-    "uvicorn"
+    "uvicorn",
+    "orjson"
 ]
 
 [tool.setuptools.packages.find]

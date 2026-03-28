@@ -17,3 +17,7 @@ class RouteNotFound(Exception):
 class InvalidHTTPErrorCode(Exception):
     """Raised when an HTTP status code is expected to be an error (400-599) but isn't."""
     pass
+
+class RequestDisconnected(Exception):
+    """Raised when the client disconnects before the request is completed."""
+    pass

@@ -1,80 +1,87 @@
-from typing import Dict, Any, Union, List, Callable, Optional
-import json
+import orjson
+from typing import Dict, Optional
 
 class Response:
+    """ASGI HTTP response.
+
+    Headers are encoded to bytes exactly once at construction time and stored
+    as the ready-to-send list, so __call__ does zero encoding work per request.
+    """
+
+    __slots__ = ("status_code", "body", "_encoded_headers")
+
     def __init__(
         self,
-        content: Union[str, bytes] = b"",
+        content: bytes | str = b"",
         status_code: int = 200,
         headers: Optional[Dict[str, str]] = None,
         media_type: Optional[str] = None,
     ):
         self.status_code = status_code
-        self.headers = headers or {}
-        self.media_type = media_type
 
+        # Normalise body to bytes once
         if isinstance(content, str):
-            self.body = content.encode("utf-8")
-            if self.media_type is None:
-                self.media_type = "text/plain"
+            body = content.encode("utf-8")
+            effective_media_type = media_type or "text/plain"
         else:
-            self.body = content
-            if self.media_type is None:
-                self.media_type = "application/octet-stream"
+            body = content
+            effective_media_type = media_type or "application/octet-stream"
+        self.body = body
 
-        if "content-length" not in self.headers:
-            self.headers["content-length"] = str(len(self.body))
-        if "content-type" not in self.headers and self.media_type:
-            self.headers["content-type"] = self.media_type
+        # Build the final header list in latin-1 bytes right now.
+        # __call__ will send this list as-is, zero encoding on the hot path.
+        raw: list[tuple[bytes, bytes]] = []
 
-    async def __call__(self, scope: dict, receive: Callable, send: Callable):
-        await send(
-            {
-                "type": "http.response.start",
-                "status": self.status_code,
-                "headers": [[k.encode("latin-1"), v.encode("latin-1")] for k, v in self.headers.items()],
-            }
+        if headers:
+            for k, v in headers.items():
+                raw.append((k.lower().encode("latin-1"), v.encode("latin-1")))
+
+        raw.append((b"content-type",   effective_media_type.encode("latin-1")))
+        raw.append((b"content-length", str(len(body)).encode("latin-1")))
+
+        self._encoded_headers = raw
+
+    # Convenience accessor used by session manager and RedirectResponse
+    # to append a header after construction (e.g. Set-Cookie, Location).
+    def add_header(self, name: str, value: str) -> None:
+        self._encoded_headers.append(
+            (name.lower().encode("latin-1"), value.encode("latin-1"))
         )
-        await send({"type": "http.response.body", "body": self.body})
 
+    async def __call__(self, scope, receive, send) -> None:
+        await send({
+            "type": "http.response.start",
+            "status": self.status_code,
+            "headers": self._encoded_headers,
+        })
+        await send({
+            "type": "http.response.body",
+            "body": self.body,
+            "more_body": False,
+        })
 
 class HTMLResponse(Response):
-    def __init__(
-        self,
-        content: str,
-        status_code: int = 200,
-        headers: Optional[Dict[str, str]] = None,
-    ):
-        super().__init__(content, status_code, headers, media_type="text/html")
+    __slots__ = ()
 
+    def __init__(self, content: str | bytes, status_code: int = 200, headers=None):
+        super().__init__(content, status_code, headers, "text/html")
 
 class JSONResponse(Response):
-    def __init__(
-        self,
-        content: Any,
-        status_code: int = 200,
-        headers: Optional[Dict[str, str]] = None,
-    ):
-        json_content = json.dumps(content, ensure_ascii=False).encode("utf-8")
-        super().__init__(json_content, status_code, headers, media_type="application/json")
+    __slots__ = ()
 
+    def __init__(self, content, status_code: int = 200, headers=None):
+        super().__init__(orjson.dumps(content), status_code, headers, "application/json")
 
 class PlainTextResponse(Response):
-    def __init__(
-        self,
-        content: str,
-        status_code: int = 200,
-        headers: Optional[Dict[str, str]] = None,
-    ):
-        super().__init__(content, status_code, headers, media_type="text/plain")
+    __slots__ = ()
 
+    def __init__(self, content: str | bytes, status_code: int = 200, headers=None):
+        super().__init__(content, status_code, headers, "text/plain")
 
 class RedirectResponse(Response):
-    def __init__(
-        self,
-        url: str,
-        status_code: int = 302,
-        headers: Optional[Dict[str, str]] = None,
-    ):
-        super().__init__(content=b"", status_code=status_code, headers=headers)
-        self.headers["location"] = url
+    __slots__ = ()
+
+    def __init__(self, url: str, status_code: int = 302, headers=None):
+        h = dict(headers) if headers else {}
+        h["location"] = url
+        super().__init__(b"", status_code, h)

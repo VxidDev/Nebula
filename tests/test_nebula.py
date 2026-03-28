@@ -177,7 +177,7 @@ async def test_template_rendering(app, client):
 
     @app.route("/tpl")
     async def tpl(req: Request):
-        return await app.render_template("hello.html", name="Test")
+        return await app.render_template_async("hello.html", name="Test")
 
     resp = await client.get("/tpl")
     assert resp.status_code==200

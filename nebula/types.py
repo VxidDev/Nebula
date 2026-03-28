@@ -1,6 +1,6 @@
 from typing import Any, Dict
 
-AVAILABLE_METHODS = ["GET", "POST"]
+AVAILABLE_METHODS = ["GET", "POST", "PUT", "DELETE"]
 
 DEFAULT_TEMPLATES_DIR = "templates"
 DEFAULT_STATICS_DIR = "statics"

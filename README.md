@@ -41,15 +41,16 @@ Here's a basic example of creating a simple web server with Nebula.
 
 ```py
 from nebula import Nebula , run_dev
-from nebula.utils import htmlify
+from nebula.response import HTMLResponse
 
 app = Nebula(__file__, "localhost", 8000)
 
-@app.route("/")
+@app.get("/", return_class=HTMLResponse)
 async def root(request) -> None:
-    return htmlify("<h1>Welcome to Nebula!</h1>")
+    return "<h1>Welcome to Nebula!</h1>"
 
-run_dev(app) # run using uvicorn
+if __name__ == "__main__":
+    run_dev(app)
 ```
 
 **Run your app**:

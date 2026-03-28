@@ -1,4 +1,4 @@
-import json
+import orjson
 import hmac
 import hashlib
 import base64
@@ -114,7 +114,7 @@ class SecureCookieSessionManager:
             try:
                 padded = verified + "=" * (-len(verified) % 4)
                 raw = base64.urlsafe_b64decode(padded.encode()).decode()
-                return Session(json.loads(raw))
+                return Session(orjson.loads(raw))
             except Exception:
                 pass
         return None
@@ -129,15 +129,16 @@ class SecureCookieSessionManager:
 
     def save_session(self, session: Session, response: Response) -> None:
         payload = (
-            base64.urlsafe_b64encode(json.dumps(dict(session)).encode())
+            base64.urlsafe_b64encode(orjson.dumps(dict(session)))
             .decode()
             .rstrip("=")
         )
         signed = self._sign(payload)
-        response.headers["set-cookie"] = (
+        
+        response.add_header("set-cookie", (
             f"{self.cookie_name}={signed}; Path=/; Max-Age={self.max_age}; HttpOnly;"
             f"{' Secure;' if self.secure else ''} SameSite=Lax"
-        )
+        ))
 
 
 
