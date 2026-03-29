@@ -403,3 +403,43 @@ async def test_render_template_string_sync(app):
     rendered_content = render_template_string(app, template_string, name="Sync")
     assert rendered_content == "Sync String Hello Sync!"
     shutil.rmtree(app.templates_dir) # Clean up temp directory
+
+@pytest.mark.asyncio
+async def test_is_html_auto_detected(app, client):
+    @app.route("/html")
+    async def html():
+        return "<h1>Hello!<h1>"
+
+    resp = await client.get("/html")
+    assert resp.status_code == 200
+    assert resp.media_type == "text/html"
+
+@pytest.mark.asyncio
+async def test_is_json_auto_detected(app, client):
+    @app.route("/json")
+    async def json():
+        return {"json": "test"}
+
+    resp = await client.get("/json")
+    assert resp.status_code == 200
+    assert resp.media_type == "application/json"
+
+@pytest.mark.asyncio
+async def test_is_redirect_auto_detected(app, client):
+    @app.route("/redirect")
+    async def redirect():
+        return f"http://{app.host}:{app.port}/html" 
+
+    resp = await client.get("/redirect")
+    assert resp.status_code == 302
+    assert resp.headers["location"] == f"http://{app.host}:{app.port}/html" 
+
+@pytest.mark.asyncio
+async def test_is_plain_text_auto_detected(app, client):
+    @app.route("/plain")
+    async def plain():
+        return "hi" 
+
+    resp = await client.get("/plain")
+    assert resp.status_code == 200
+    assert resp.body == b"hi"

@@ -18,7 +18,7 @@ class Route:
         "_is_static",   # True -> no params; match() skips groupdict() allocation
         "accepts_request_arg",    )
 
-    def __init__(self, path: str, method: str, handler: Callable, return_class = PlainTextResponse, is_async: bool = False):
+    def __init__(self, path: str, method: str, handler: Callable, return_class = None, is_async: bool = False):
         self.path_template = path
         self.method = method.upper()  
         self.handler = handler

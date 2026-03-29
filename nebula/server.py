@@ -13,7 +13,7 @@ import os
 import socketio
 
 from .request import Request
-from .response import Response, PlainTextResponse, HTMLResponse
+from .response import Response, PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
 from .routing import Route
 from .session import SecureCookieSessionManager, UserMixin, AnonymousUser
 from .utils.render_template import ( 
@@ -64,6 +64,28 @@ def handler_accepts_request(f):
         if param.annotation is Request:
             return True
     return False
+
+def auto_detect_response(content, route):
+    # JSON (strong signal)
+    if isinstance(content, (dict, list)):
+        return JSONResponse(content)
+
+    # Explicit string handling
+    if isinstance(content, str):
+        stripped = content.lstrip()
+
+        # HTML detection
+        if stripped.startswith("<"):
+            return HTMLResponse(content)
+
+        # Redirect detection
+        if stripped.startswith("http://") or stripped.startswith("https://"):
+            return RedirectResponse(content)
+
+        return PlainTextResponse(content)
+
+    # Fallback for other types
+    return PlainTextResponse(str(content))
 
 class Nebula:
     def __init__(self, module_name: str, host: str, port: int, debug: bool = False, import_string: str = None):
@@ -304,7 +326,7 @@ class Nebula:
         elif route.return_class:
             response = route.return_class(response_content)
         else:
-            response = PlainTextResponse(str(response_content))
+            response = auto_detect_response(response_content, route)
 
         # Persist session if dirty
         if session is not None and session.modified:
@@ -320,7 +342,7 @@ class Nebula:
 
         return handler(scope, receive, send)
 
-    def route(self, path: str, methods: List[str] = None, return_class = PlainTextResponse) -> Callable:
+    def route(self, path: str, methods: List[str] = None, return_class = None) -> Callable:
         def decorator(f: Callable) -> Callable:
             mds = methods or ["GET"]
             is_async = inspect.iscoroutinefunction(f)
@@ -347,20 +369,20 @@ class Nebula:
 
         return decorator
 
-    def get(self, path: str, return_class = PlainTextResponse) -> Callable:
+    def get(self, path: str, return_class = None) -> Callable:
         return self.route(path, ["GET"], return_class)
     
-    def post(self, path: str, return_class = PlainTextResponse) -> Callable:
+    def post(self, path: str, return_class = None) -> Callable:
         return self.route(path, ["POST"], return_class)
 
-    def put(self, path: str, return_class = PlainTextResponse) -> Callable:
+    def put(self, path: str, return_class = None) -> Callable:
         return self.route(path, ["PUT"], return_class)
 
-    def delete(self, path: str, return_class = PlainTextResponse) -> Callable:
+    def delete(self, path: str, return_class = None) -> Callable:
         return self.route(path, ["DELETE"], return_class)
 
     def add_url_rule(
-        self, rule: str, endpoint: str = None, view_func: Callable = None, return_class = PlainTextResponse, **options
+        self, rule: str, endpoint: str = None, view_func: Callable = None, return_class = None, **options
     ):
         methods = options.get("methods", ["GET"])
 
