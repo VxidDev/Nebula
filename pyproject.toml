@@ -10,7 +10,7 @@ authors = [
     {name = "amogus-gggy"}
 ]
 
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10"
 
 dependencies = [
     "jinja2",
