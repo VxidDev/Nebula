@@ -69,7 +69,13 @@ class Request:
 
         # Cache the two most-accessed fields immediately, they are read on
         # every single request by the router and middleware.
-        self.method = scope["method"] # already a str in ASGI
+        if self.scope["type"] == "http":
+            self.method = scope["method"] 
+        elif self.scope["type"] == "websocket":
+            self.method = "websocket"
+        else:
+            self.method = None
+
         self.path = scope["path"]
 
         self._body = None

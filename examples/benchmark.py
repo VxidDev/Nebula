@@ -9,4 +9,4 @@ async def home(request) -> JSONResponse:
     return {"test": "test"}
 
 if __name__ == "__main__":
-    run_prod(app, workers=8)
+    run_prod(app, workers=4)

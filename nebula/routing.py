@@ -16,7 +16,7 @@ class Route:
         "path_regex",
         "param_names",
         "_is_static",   # True -> no params; match() skips groupdict() allocation
-    )
+        "accepts_request_arg",    )
 
     def __init__(self, path: str, method: str, handler: Callable, return_class = PlainTextResponse, is_async: bool = False):
         self.path_template = path
@@ -24,6 +24,7 @@ class Route:
         self.handler = handler
         self.return_class = return_class
         self.is_async = is_async
+        self.accepts_request_arg = False # Will be set by Nebula.route()
 
         self.path_regex, self.param_names = self._compile_path(path)
         self._is_static = len(self.param_names) == 0

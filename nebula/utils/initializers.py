@@ -6,7 +6,13 @@ from ..types import DEFAULT_404_BODY
 import mimetypes
 
 def init_static_serving(app, endpoint: str = "static", static_dir: Optional[str] = None) -> None:
-    app.statics_dir = Path(app.module_name).resolve().parent / (static_dir if static_dir else "statics") 
+    if static_dir:
+        resolved_static_dir = Path(static_dir)
+        if not resolved_static_dir.is_absolute():
+            resolved_static_dir = Path(app.module_name).resolve().parent / resolved_static_dir
+    else:
+        resolved_static_dir = Path(app.module_name).resolve().parent / "statics"
+    app.statics_dir = resolved_static_dir
         
     import mimetypes
 
@@ -36,4 +42,8 @@ def init_template_path(app , template_dir: Optional[str] = None) -> None:
 
 def init_template_renderer(app) -> None:
     app.jinja_env = Environment(loader=FileSystemLoader(app.templates_dir), enable_async=True)
+    return  
+
+def init_template_renderer_sync(app) -> None:
+    app.jinja_env_sync = Environment(loader=FileSystemLoader(app.templates_dir), enable_async=False)
     return

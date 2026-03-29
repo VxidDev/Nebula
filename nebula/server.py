@@ -20,7 +20,7 @@ from .utils.render_template import (
     render_template, render_template_async, render_template_string, render_template_string_async 
 )
 
-from .utils import init_template_path, init_template_renderer, init_static_serving
+from .utils import init_template_path, init_template_renderer, init_static_serving, init_template_renderer_sync
 
 from .types import (
     AVAILABLE_METHODS,
@@ -31,6 +31,39 @@ from .types import (
     DEFAULT_405_BODY,
 )
 from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode
+from contextvars import ContextVar
+
+_current_request: ContextVar["Request"] = ContextVar("current_request")
+
+def get_request() -> "Request":
+    return _current_request.get()
+
+class _RequestProxy:
+    def __getattr__(self, item):
+        try:
+            return getattr(get_request(), item)
+        except LookupError:
+            raise RuntimeError(
+                "No active request context. Use inside a request handler."
+            )
+
+def has_request() -> bool:
+    try:
+        _current_request.get()
+        return True
+    except LookupError:
+        return False
+
+request = _RequestProxy()
+
+def handler_accepts_request(f):
+    sig = inspect.signature(f)
+    for name, param in sig.parameters.items():
+        if name == "request":
+            return True
+        if param.annotation is Request:
+            return True
+    return False
 
 class Nebula:
     def __init__(self, module_name: str, host: str, port: int, debug: bool = False, import_string: str = None):
@@ -73,6 +106,7 @@ class Nebula:
         }
 
         self.jinja_env = None
+        self.jinja_env_sync = None
 
         self.sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
         self.app = socketio.ASGIApp(self.sio, other_asgi_app=self.handle_http)
@@ -138,17 +172,25 @@ class Nebula:
         init_static_serving(self, static_endpoint, static_dir or self.statics_dir)
         init_template_path(self, template_dir or self.templates_dir)
         init_template_renderer(self)
+        init_template_renderer_sync(self)
 
     async def __call__(self, scope, receive, send):
-        # Check "http" first, it is by far the most common scope type.
         scope_type = scope["type"]
 
+        if scope_type == "lifespan":
+            return await self.handle_lifespan(receive, send)
+
+        path = scope.get("path", "")
+
+        # Forward all socket.io traffic
+        if path.startswith("/socket.io") or scope_type == "websocket":
+            return await self.app(scope, receive, send)
+
+        # Normal HTTP
         if scope_type == "http":
-            await self.handle_http(scope, receive, send)
-        elif scope_type == "websocket":
-            await self.app(scope, receive, send)
-        else:  # "lifespan"
-            await self.handle_lifespan(receive, send)
+            return await self.handle_http(scope, receive, send)
+
+        self.handle_lifespan(receive, send)
 
     async def handle_lifespan(self, receive, send):
         while True:
@@ -164,6 +206,7 @@ class Nebula:
 
     async def handle_http(self, scope: dict, receive: callable, send: callable):
         request = Request(scope, receive, send)
+        token = _current_request.set(request) # set context
 
         session = None
         session_mgr = self._session_manager
@@ -233,9 +276,15 @@ class Nebula:
                     self.exec_before_request(request)
 
             if route.is_async:
-                response_content = await route.handler(request, **values)
+                if route.accepts_request_arg:
+                    response_content = await route.handler(request, **values)
+                else:
+                    response_content = await route.handler(**values)
             else:
-                response_content = route.handler(request, **values)
+                if route.accepts_request_arg:
+                    response_content = route.handler(request, **values)
+                else:
+                    response_content = route.handler(**values)
 
             if self.exec_after_request is not None:
                 if self._after_is_async:
@@ -246,6 +295,8 @@ class Nebula:
         except Exception as e:
             print(f"\033[1;31mERROR:\033[1;0m {e}")
             return await self._dispatch_error(500, scope, receive, send)
+        finally:
+            _current_request.reset(token)
 
         # Wrap bare return values
         if isinstance(response_content, Response):
@@ -274,6 +325,9 @@ class Nebula:
             mds = methods or ["GET"]
             is_async = inspect.iscoroutinefunction(f)
 
+            # Check if the handler accepts request
+            accepts_request = handler_accepts_request(f)
+
             for method in mds:
                 if method not in AVAILABLE_METHODS:
                     raise InvalidMethod(f"Method: '{method}' not recognized.")
@@ -284,6 +338,7 @@ class Nebula:
 
                 new_route = Route(path, method, f, return_class)
                 new_route.is_async = is_async # cache async flag on the Route object
+                new_route.accepts_request_arg = accepts_request
 
                 self.routes.append(new_route)
 
