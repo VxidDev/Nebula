@@ -21,3 +21,7 @@ class InvalidHTTPErrorCode(Exception):
 class RequestDisconnected(Exception):
     """Raised when the client disconnects before the request is completed."""
     pass
+
+class InvalidResponseClass(Exception):
+    """Raised when the route returns a class/type that does not inherits from Response class."""
+    pass

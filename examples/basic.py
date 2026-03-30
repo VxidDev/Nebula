@@ -1,11 +1,11 @@
 from nebula import Nebula
-from nebula.response import Response, JSONResponse, HTMLResponse
+from nebula.response import Response, HTMLResponse
 
 from nebula.utils import (
-    jsonify, htmlify, load_template , render_template_async , render_template_string_async
+    render_template_async , render_template_string_async
 )
 
-app = Nebula(__file__ , "localhost", 8000, False)
+app = Nebula()
 app.init_all("statics")
 
 jinja_template = """
@@ -16,15 +16,15 @@ jinja_template = """
 async def main(request):
     if request.method == "POST":    
         data = await request.json()
-        return jsonify({"greet": f"Hi, {data.get('name', 'default')}!"})
+        return {"greet": f"Hi, {data.get('name', 'default')}!"}
 
     return await render_template_async(app, "test.html")
 
-@app.get("/greet/{name}", return_class=HTMLResponse)
+@app.get("/greet/{name}")
 def greet(name: str):
     return f"<h1>Hi, {name}!</h1>"
 
-@app.get("/fruits", return_class=JSONResponse)
+@app.get("/fruits")
 def jsonTest():
     return {
         "fruits": {
@@ -47,7 +47,7 @@ async def doesnt_work(scope, receive, send):
     await HTMLResponse("<h1>Internal Error!</h1>", 500)(scope, receive, send)
 
 @app.get("/internal-error")
-async def error(request):
+async def error():
     await Response(f"Error!", 500)
 
 @app.post("/api")
@@ -59,10 +59,10 @@ async def api(request):
 async def jinja():
     return await render_template_async(app, "jinja_template.html", APP=app)
 
-@app.route("/jinja/string", return_class=HTMLResponse)
+@app.route("/jinja/string")
 async def jinja_string():
     string = await render_template_string_async(app, jinja_template, APP=app)
     return string
 
 if __name__ == "__main__":
-    app.run()
+    app.run("localhost", 8000)

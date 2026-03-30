@@ -30,7 +30,8 @@ from .types import (
     DEFAULT_500_BODY,
     DEFAULT_405_BODY,
 )
-from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode
+
+from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode, InvalidResponseClass
 from contextvars import ContextVar
 
 _current_request: ContextVar["Request"] = ContextVar("current_request")
@@ -58,12 +59,29 @@ request = _RequestProxy()
 
 def handler_accepts_request(f):
     sig = inspect.signature(f)
+
     for name, param in sig.parameters.items():
         if name == "request":
             return True
         if param.annotation is Request:
             return True
+
     return False
+
+def get_caller_file():
+    frame = inspect.stack()[2]  # go up the stack
+    module = inspect.getmodule(frame[0])
+
+    if module and hasattr(module, "__file__"):
+        return module.__file__
+
+    return None
+
+def is_valid_response_class(obj):
+    try:
+        return isinstance(obj, type) and issubclass(obj, Response)
+    except TypeError:
+        return False
 
 def auto_detect_response(content, route):
     # JSON (strong signal)
@@ -75,7 +93,7 @@ def auto_detect_response(content, route):
         stripped = content.lstrip()
 
         # HTML detection
-        if stripped.startswith("<"):
+        if stripped.startswith("<") and ">" in stripped:
             return HTMLResponse(content)
 
         # Redirect detection
@@ -88,8 +106,8 @@ def auto_detect_response(content, route):
     return PlainTextResponse(str(content))
 
 class Nebula:
-    def __init__(self, module_name: str, host: str, port: int, debug: bool = False, import_string: str = None):
-        self.module_name = module_name
+    def __init__(self, host: Optional[str] = "127.0.0.1", port: Optional[int] = 5000, debug: bool = False, import_string: Optional[str] = None, module_name: Optional[str] = None):
+        self.module_name = module_name or get_caller_file()
         self.import_string = import_string
         self.debug = debug
 
@@ -234,7 +252,7 @@ class Nebula:
         session_mgr = self._session_manager
 
         if session_mgr is not None:
-            session         = session_mgr.open_session(request)
+            session = session_mgr.open_session(request)
             request.session = session
 
             user_loader = self._user_loader
@@ -324,7 +342,10 @@ class Nebula:
         if isinstance(response_content, Response):
             response = response_content
         elif route.return_class:
-            response = route.return_class(response_content)
+            if isinstance(response_content, Response):
+                response = response_content
+            else:
+                response = route.return_class(response_content)
         else:
             response = auto_detect_response(response_content, route)
 
@@ -358,7 +379,20 @@ class Nebula:
                     if existing_route.path_template == path and existing_route.method == method.upper():
                         raise DuplicateEndpoint(f"Route '{path}' with method '{method}' already exists.")
 
-                new_route = Route(path, method, f, return_class)
+                sig = inspect.signature(f)
+                annotation = None if sig.return_annotation is inspect._empty else sig.return_annotation 
+                final_return = return_class if return_class is not None else annotation
+
+                if not is_valid_response_class(final_return) and final_return is not None:
+                    name = getattr(final_return, "__name__", str(final_return))
+
+                    obj_name = "Class" if isinstance(final_return, type) else "Type"
+
+                    raise InvalidResponseClass(
+                        f"{obj_name}: {name} does not inherit from Response class."
+                    )
+
+                new_route = Route(path, method, f, final_return)
                 new_route.is_async = is_async # cache async flag on the Route object
                 new_route.accepts_request_arg = accepts_request
 
@@ -396,6 +430,11 @@ class Nebula:
                 for existing_route in self.routes:
                     if existing_route.path_template == rule and existing_route.method == method.upper():
                         raise DuplicateEndpoint(f"Route '{rule}' with method '{method}' already exists.")
+
+                if return_class is not None and not is_valid_response_class(return_class):
+                    raise InvalidResponseClass(
+                        f"Class: {return_class.__name__} does not inherit from Response class."
+                    )
 
                 new_route = Route(rule, method, view_func, return_class)
                 new_route.is_async = is_async
@@ -500,8 +539,8 @@ class Nebula:
     def run(self, host: Optional[str] = None , port: Optional[str] = None):
         run_dev(self, host, port)
 
-def run_dev(app: Nebula, host: Optional[str] = None, port: Optional[str] = None):
-    uvicorn.run(app, host=host or app.host, port=port or app.port)
+def run_dev(app: Nebula, host: Optional[str] = None, port: Optional[str] = None, **kwargs):
+    uvicorn.run(app, host=host or app.host, port=port or app.port, **kwargs)
 
 def run_prod(
     app: Nebula,
@@ -509,6 +548,7 @@ def run_prod(
     port: Optional[int] = None,
     workers: int = 1,
     log_level: str = "info",
+    **kwargs
 ) -> None:
     if not app.import_string:
         raise RuntimeError(
@@ -541,4 +581,5 @@ def run_prod(
         app_dir=directory,
         reload=False, 
         log_level=log_level,
+        **kwargs
     )

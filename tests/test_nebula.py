@@ -117,7 +117,7 @@ class ASGITestClient:
 
 @pytest.fixture
 def app():
-    _app = Nebula(__name__, debug=True, host="127.0.0.1", port=8000)
+    _app = Nebula(debug=True, host="127.0.0.1", port=8000)
     _app.init_all()
     return _app
 
