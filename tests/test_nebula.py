@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Optional, Dict, Union
 
 from nebula.server import Nebula, get_request, has_request
+from nebula.routing import RouteGroup
 from nebula.request import Request
 from nebula.response import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from nebula.session import SecureCookieSessionManager, UserMixin
-from nebula.exceptions import InvalidMethod, DuplicateEndpoint, TemplateNotFound
+from nebula.exceptions import InvalidMethod, DuplicateEndpoint, TemplateNotFound, InvalidResponseClass
 from nebula.utils.htmlify import htmlify
 from nebula.utils.initializers import init_static_serving, init_template_renderer, init_template_renderer_sync
 from nebula.utils.jsonify import jsonify
@@ -443,3 +444,105 @@ async def test_is_plain_text_auto_detected(app, client):
     resp = await client.get("/plain")
     assert resp.status_code == 200
     assert resp.body == b"hi"
+
+@pytest.mark.asyncio
+async def test_is_html_return_type_correctly_auto_detected(app, client):
+    @app.route("/html-or-json", return_class=HTMLResponse)
+    async def htmlOrJson() -> JSONResponse:
+        return "hi" 
+
+    resp = await client.get("/html-or-json")
+    assert resp.status_code == 200
+    assert resp.media_type == "text/html"
+
+@pytest.mark.asyncio
+async def test_is_json_return_type_correctly_auto_detected(app, client):
+    @app.route("/json-resp")
+    async def jsonResp() -> JSONResponse:
+        return {"greeting": "hi"} 
+
+    resp = await client.get("/json-resp")
+    assert resp.status_code == 200
+    assert resp.media_type == "application/json"
+    assert resp.body == b'{"greeting":"hi"}'
+
+@pytest.mark.asyncio
+async def test_is_none_return_type_handled_correctly(app, client):
+    @app.route("/none-resp")
+    async def noneReturnType() -> None:
+        return "hi" 
+
+    @app.route("/none-response", return_class=None)
+    async def noneRespType():
+        return "hi"
+
+    resp = await client.get("/none-resp")
+    assert resp.status_code == 200
+    assert resp.media_type == "text/plain"
+
+    resp = await client.get("/none-response")
+    assert resp.status_code == 200
+    assert resp.media_type == "text/plain"
+
+@pytest.mark.asyncio
+async def test_is_invalid_return_type_handled_correctly(app, client):
+    try:
+        @app.route("/int-resp")
+        async def intRes() -> int:
+            return "hi"
+
+        raise RuntimeError("[INVALID] int response passed the check.") 
+    except InvalidResponseClass:
+        pass 
+
+    try:
+        @app.route("/str-resp")
+        async def strRes() -> str:
+            return "hi"
+
+        raise RuntimeError("[INVALID] str response passed the check.") 
+    except InvalidResponseClass:
+        pass
+    
+    try:
+        @app.route("/tuple-resp")
+        async def tupleRes() -> tuple:
+            return "hi"
+
+        raise RuntimeError("[INVALID] tuple response passed the check.") 
+    except InvalidResponseClass:
+        pass
+    
+    try:
+        @app.route("/list-resp")
+        async def listRes() -> list:
+            return "hi"
+
+        raise RuntimeError("[INVALID] list response passed the check.") 
+    except InvalidResponseClass:
+        pass
+
+@pytest.mark.asyncio
+async def test_is_route_group_working(app, client):
+    api: RouteGroup = client.app.group("/api")
+
+    @api.get("/greet/{name}")
+    async def jsonResp(name) -> JSONResponse:
+        return {"greeting": f"Hi, {name}!"}
+
+    @api.post("/add")
+    async def evalApi(request: Request):
+        json = await request.json()
+        x, y = json.get("x", None), json.get("y", None)
+
+        return {"result": x + y} 
+
+    resp = await client.get("/api/greet/Anon")
+    assert resp.status_code == 200
+    assert resp.media_type == "application/json"
+    assert resp.body == b'{"greeting":"Hi, Anon!"}'
+
+    resp = await client.post("/api/add", json={"x": 5, "y": 6})
+    assert resp.status_code == 200
+    assert resp.media_type == "application/json"
+    assert resp.body == b'{"result":11}'

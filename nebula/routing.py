@@ -80,3 +80,23 @@ class Route:
 
         # Static routes carry no params, avoid the groupdict() allocation
         return {} if self._is_static else m.groupdict()
+
+class RouteGroup:
+    def __init__(self, app: "Nebula", prefix: str) -> None:
+        self.app: "Nebula" = app
+        self.prefix: str = prefix
+
+    def get(self, path: str, return_class = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["GET"], return_class)
+    
+    def post(self, path: str, return_class = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["POST"], return_class)
+
+    def put(self, path: str, return_class = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["PUT"], return_class)
+
+    def delete(self, path: str, return_class = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["DELETE"], return_class)
+
+    def route(self, path: str, methods: List[str] = None, return_class = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", methods, return_class)

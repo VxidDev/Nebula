@@ -14,7 +14,7 @@ import socketio
 
 from .request import Request
 from .response import Response, PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
-from .routing import Route
+from .routing import Route, RouteGroup
 from .session import SecureCookieSessionManager, UserMixin, AnonymousUser
 from .utils.render_template import ( 
     render_template, render_template_async, render_template_string, render_template_string_async 
@@ -535,6 +535,9 @@ class Nebula:
 
     def set_import_string(self, string: str):
         self.import_string = string
+
+    def group(self, prefix: str) -> RouteGroup:
+        return RouteGroup(self, prefix)
 
     def run(self, host: Optional[str] = None , port: Optional[str] = None):
         run_dev(self, host, port)
