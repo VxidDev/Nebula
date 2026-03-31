@@ -5,7 +5,7 @@ from nebula.request import Request
 from nebula.response import HTMLResponse, RedirectResponse
 from nebula.session import SecureCookieSessionManager, UserMixin, AnonymousUser
 
-app = Nebula(__file__, host="0.0.0.0" , port=5000 , debug=True)
+app = Nebula(host="0.0.0.0" , port=5000 , debug=True)
 app.init_all()
 app.setup_sessions(secret_key="change-me-in-production", max_age=3600)
 

@@ -1,7 +1,7 @@
 from nebula import Nebula
 from nebula.request import Request
 
-app = Nebula(__file__, "0.0.0.0", 5000, debug=True)
+app = Nebula("0.0.0.0", 5000, debug=True)
 app.init_all()
 
 # Storage for messages and connected clients
