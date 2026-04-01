@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Optional, Dict, Union
 
 from nebula.server import Nebula, get_request, has_request
+from nebula.types import DEFAULT_404_BODY
 from nebula.routing import RouteGroup
 from nebula.request import Request
-from nebula.response import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from nebula.response import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse, Response 
 from nebula.session import SecureCookieSessionManager, UserMixin
-from nebula.exceptions import InvalidMethod, DuplicateEndpoint, TemplateNotFound, InvalidResponseClass
+from nebula.exceptions import InvalidMethod, DuplicateEndpoint, TemplateNotFound, InvalidResponseClass, HTTPException
 from nebula.utils.htmlify import htmlify
 from nebula.utils.initializers import init_static_serving, init_template_renderer, init_template_renderer_sync
 from nebula.utils.jsonify import jsonify
@@ -546,3 +547,14 @@ async def test_is_route_group_working(app, client):
     assert resp.status_code == 200
     assert resp.media_type == "application/json"
     assert resp.body == b'{"result":11}'
+
+@pytest.mark.asyncio
+async def test_are_HTTPExceptions_handled_correctly(app, client):
+    @app.route("/404")
+    async def raise404():
+        raise HTTPException(404)
+
+    resp = await client.get("/404")
+    assert resp.status_code == 404
+    assert resp.media_type == "text/html"
+    assert resp.body == DEFAULT_404_BODY.encode()

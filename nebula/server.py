@@ -1,5 +1,4 @@
 from __future__ import annotations
-from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
 from typing import Dict, List, Callable, Optional, Any
@@ -32,7 +31,7 @@ from .types import (
     DEFAULT_405_BODY,
 )
 
-from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode, InvalidResponseClass
+from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode, InvalidResponseClass, HTTPException
 from contextvars import ContextVar
 
 _current_request: ContextVar["Request"] = ContextVar("current_request")
@@ -371,11 +370,21 @@ class Nebula:
             return await current_app(scope, receive, send)
 
         except Exception as e:
-            print(f"\033[1;31mERROR:\033[1;0m {e}")
-            return await self._dispatch_error(500, scope, receive, send)
+            error = str(e)
+            print(f"\033[1;31mERROR:\033[1;0m {error if len(error) > 0 else 'No description provided.'}")
+
+            if isinstance(e, HTTPException):
+                status_code = e.status_code
+            else:
+                status_code = 500
+
+            return await self._dispatch_error(status_code, scope, receive, send)
 
     async def _dispatch_error(self, code: int, scope, receive, send):
         handler = self.error_handlers[code]
+
+        if not handler:
+            handler = self.error_handlers[500]
 
         if self._error_handler_is_async.get(code, True):
             return await handler(scope, receive, send)

@@ -25,3 +25,10 @@ class RequestDisconnected(Exception):
 class InvalidResponseClass(Exception):
     """Raised when the route returns a class/type that does not inherits from Response class."""
     pass
+
+class HTTPException(Exception):
+    """Exception used to trigger HTTP error responses."""
+    def __init__(self, status_code: int, body: str = ""):
+        self.status_code = status_code
+        
+        super().__init__(body)

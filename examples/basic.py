@@ -1,5 +1,6 @@
 from nebula import Nebula
 from nebula.response import Response, HTMLResponse
+from nebula.exceptions import HTTPException
 
 from nebula.utils import (
     render_template_async , render_template_string_async
@@ -48,7 +49,7 @@ async def doesnt_work(scope, receive, send):
 
 @app.get("/internal-error")
 async def error():
-    return Response(f"Error!", 500)
+    raise HTTPException(500)
 
 @app.post("/api")
 async def api(request):

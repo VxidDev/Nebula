@@ -4,32 +4,64 @@ Documentation for Nebula's features.
 
 ### Middleware Support
 
-Nebula supports middleware for processing requests and responses.
-
-**Defining a Middleware Class**:
-Middleware classes should typically inherit from `BaseMiddleware` or implement an ASGI-compatible `__call__` method.
+Nebula supports middleware for processing requests and responses. Middleware classes should inherit from `BaseMiddleware` and implement an ASGI-compatible `__call__` method.
 
 ```python
-from nebula import Nebula, Request, Middleware, BaseMiddleware
+import datetime
+from nebula import Nebula
+from nebula.request import Request
+from nebula.middleware import Middleware, BaseMiddleware
 
-# Example Middleware Class
-class LogMiddleware(BaseMiddleware):
+# A simple logging middleware
+class LoggingMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
-        print(f"Incoming request: {self.app.scope['method']} {self.app.scope['path']}")
-        await self.app(scope, receive, send)
-        print("Response sent.")
+        if scope["type"] == "http":
+            start_time = datetime.datetime.now()
+            print(f"[{start_time}] Request started for {scope['path']}")
 
-# Global Middleware: Passed during Nebula initialization
-app = Nebula(middlewares=[Middleware(LogMiddleware)])
+            await super().__call__(scope, receive, send)
 
-# Route-Specific Middleware: Applied to a group or individual route
-@app.group("/admin", middlewares=[Middleware(LogMiddleware)])
-def admin_group():
-    @app.get("/dashboard")
-    async def admin_dashboard(request: Request):
-        return "Admin Dashboard"
+            end_time = datetime.datetime.now()
+            duration = end_time - start_time
+            print(f"[{end_time}] Request finished for {scope['path']} in {duration.total_seconds():.4f} seconds")
+        else:
+            await super().__call__(scope, receive, send)
 
-@app.get("/users/{user_id}", route_middlewares=[Middleware(LogMiddleware)])
+# Another middleware example, specific to API routes
+class APILoggerMiddleware(BaseMiddleware):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            start_time = datetime.datetime.now()
+            print(f"[{start_time}] Handling API request... {scope['path']}")
+
+            await super().__call__(scope, receive, send)
+        else:
+            await super().__call__(scope, receive, send)
+
+app = Nebula(
+    middlewares = [
+        Middleware(LoggingMiddleware) # Applied globally to all routes
+    ]
+)
+
+# Apply middleware to a group of routes
+api = app.group(
+    "/api",
+    middlewares = [
+        Middleware(APILoggerMiddleware)
+    ]
+)
+
+@app.get("/")
+async def home():
+    return "<h1>Hello from Nebula with Logging Middleware!</h1>"
+
+@api.get("/greet/{name}")
+async def greet(name: str):
+    return {"greeting": f"Hi, {name}!"}
+
+# You can also apply middleware to a single route using the `route_middlewares` argument
+@app.get("/users/{user_id}", route_middlewares=[Middleware(APILoggerMiddleware)])
 async def get_user(request: Request, user_id: int):
     return f"User ID: {user_id}"
 
@@ -37,30 +69,103 @@ if __name__ == "__main__":
     app.run()
 ```
 
+### Applying Middleware
+
+Middleware can be applied at different levels:
+
+*   **Global Middleware**: Passed during `Nebula` initialization, affecting all requests.
+*   **Group-Specific Middleware**: Applied to a group of routes using `app.group()`.
+*   **Route-Specific Middleware**: Applied to an individual route using the `route_middlewares` argument in route decorators (e.g., `@app.get()`, `@app.post()`).
+
 ### Session Management
 
-Nebula provides secure session management using HMAC-signed cookies. You need to set a `SECRET_KEY` and call `setup_sessions`.
+Nebula provides secure session management using HMAC-signed cookies. You need to set a `SECRET_KEY` and call `setup_sessions`. It also offers utilities for user session management via `UserMixin` and `app.user_loader`.
 
 ```python
-from nebula import Nebula, Request
+from nebula import Nebula, SecureCookieSessionManager, UserMixin
+from nebula.request import Request
+from nebula.response import RedirectResponse
 
-app = Nebula(host="localhost", port=8000)
-app.setup_sessions(secret_key="your-super-secret-key-change-me") # IMPORTANT: Use a strong, unique secret key
+app = Nebula()
+# IMPORTANT: Use a strong, unique secret key and manage its security.
+app.setup_sessions(secret_key="your-super-secret-key-change-me", max_age=3600)
 
+# Example User class integrating with UserMixin for session management
+class User(UserMixin):
+    def __init__(self, user_id: str):
+        self.id = user_id # 'id' attribute is used by UserMixin.get_id()
+        self.name = f"User {user_id}"
+
+# In a real application, this would load a user from a database
+USERS_DB = {
+    "1": {"username": "alice", "password": "password123"},
+    "2": {"username": "bob", "password": "secret"},
+}
+
+@app.user_loader
+async def load_user(user_id: str):
+    """
+    This function is called by Nebula to load a user object from the session.
+    """
+    for entry in USERS_DB.values():
+        if entry["username"] == user_id:
+            return User(user_id)
+            
+    return None
+
+@app.get("/login")
+async def login(request: Request):
+    # If the user is already authenticated, redirect them
+    if request.user.is_authenticated:
+        return RedirectResponse("/profile")
+    return "<h1>Login Page</h1><form method='post' action='/do_login'><input type='text' name='user_id'><input type='password' name='password'><button type='submit'>Login</button></form>"
+
+@app.post("/do_login")
+async def do_login(request: Request):
+    form = await request.form()
+    user_id = form.get("user_id", [""])[0]
+    password = form.get("password", [""])[0]
+
+    for entry in USERS_DB.values():
+        if user_id == entry["username"] and entry["password"] == password:
+            # Store the user ID in the session
+            request.session[SecureCookieSessionManager._USER_ID_KEY] = User(user_id).get_id()
+            return RedirectResponse("/profile")
+
+    return "<p>Invalid credentials.</p> <a href='/login'>Try again</a>"
+
+
+@app.get("/profile")
+async def profile(request: Request):
+    # `request.user` is available thanks to `user_loader`
+    print(request.user)
+    if not request.user.is_authenticated:
+        return RedirectResponse("/login")
+
+    return f"<h1>Welcome, {request.user.name}!</h1><p><a href='/logout'>Logout</a></p>"
+
+@app.get("/logout")
+async def logout(request: Request):
+    # Clear the user ID from the session
+    if SecureCookieSessionManager._USER_ID_KEY in request.session:
+        request.session.pop(SecureCookieSessionManager._USER_ID_KEY)
+    return RedirectResponse("/login")
+
+# --- Example of generic session variable usage ---
 @app.get("/session/set")
 async def set_session(request: Request):
-    request.session["username"] = "nebula_user"
-    return "Session variable 'username' set."
+    request.session["theme"] = "dark"
+    return "Session variable 'theme' set to 'dark'."
 
 @app.get("/session/get")
 async def get_session(request: Request):
-    username = request.session.get("username", "guest")
-    return f"Hello, {username}!"
+    theme = request.session.get("theme", "light")
+    return f"Current theme from session: {theme}"
 
-@app.get("/session/clear")
-async def clear_session(request: Request):
+@app.get("/session/clear_all")
+async def clear_all_session(request: Request):
     request.session.clear()
-    return "Session cleared."
+    return "All session variables cleared."
 
 if __name__ == "__main__":
     app.run()
@@ -71,7 +176,8 @@ if __name__ == "__main__":
 Nebula integrates with `python-socketio` for real-time WebSocket communication.
 
 ```python
-from nebula import Nebula, Request
+from nebula import Nebula
+from nebula.request import Request # Request might not be directly used in handlers but could be in a real app context
 
 app = Nebula()
 
@@ -91,29 +197,28 @@ async def handle_message(sid, message):
     await app.emit("response", {"data": f"Server received: {message['data']}"}, to=sid)
 
 if __name__ == "__main__":
-    # To run, you typically need to provide the ASGI app to socketio.ASGIApp
-    # In Nebula, this is handled internally via app.app which is socketio.ASGIApp(self.sio, other_asgi_app=self._core)
-    # So, just running app.run() should work if Socket.IO is configured correctly.
     app.run()
 ```
-*Note: The `app.run()` method internally handles the ASGI app composed with Socket.IO.*
 
 ### Error Handling
 
-Define custom error handlers for specific HTTP status codes using the \`@app.error_handler()\` decorator.
+Define custom error handlers for specific HTTP status codes using the `@app.error_handler()` decorator.
 
 ```python
-from nebula import Nebula, Request, HTTPException
+from nebula import Nebula
+from nebula.request import Request
+from nebula.response import HTMLResponse
+from nebula.exceptions import HTTPException
 
 app = Nebula()
 
 @app.error_handler(404)
-async def custom_not_found_handler(request: Request, exc: HTTPException):
-    return "<h1>Oops! Page not found (404)</h1>", 404
+async def custom_not_found_handler(scope, receive, send):
+    await HTMLResponse("<h1>Oops! Page not found (404) </h1>", status_code=404)(scope, receive, send)
 
 @app.error_handler(500)
-async def custom_server_error_handler(request: Request, exc: HTTPException):
-    return "<h1>Something went wrong (500)</h1>", 500
+async def custom_server_error_handler(scope, receive, send):
+    await HTMLResponse("<h1>Something went wrong (500) </h1>", status_code=500)(scope, receive, send)
 
 @app.get("/")
 async def index():
@@ -121,7 +226,7 @@ async def index():
 
 @app.get("/raise_error")
 async def raise_error():
-    raise HTTPException(status_code=500, detail="This is a test internal server error.")
+    raise HTTPException(500)
 
 if __name__ == "__main__":
     app.run()
@@ -141,14 +246,12 @@ To set up a development environment for Nebula:
     python -m venv venv
     source venv/bin/activate  # On Windows use venv\Scripts\activate\
     ```
-3.  **Install dependencies**:
-    Nebula can be installed in editable mode for development. It's recommended to also install development dependencies.
+3.  **Install Nebula**:
+    Nebula can be installed in editable mode for development.
+
     ```bash
     pip install -e .
-    # If a requirements-dev.txt exists, install it too:
-    # pip install -r requirements-dev.txt
     ```
-    If `requirements-dev.txt` doesn't exist, you might need to manually install testing and other development tools (e.g., `pip install pytest pytest-asyncio`).
 
 ## Testing
 
