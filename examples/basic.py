@@ -48,7 +48,7 @@ async def doesnt_work(scope, receive, send):
 
 @app.get("/internal-error")
 async def error():
-    await Response(f"Error!", 500)
+    return Response(f"Error!", 500)
 
 @app.post("/api")
 async def api(request):

@@ -8,15 +8,15 @@
 
 ## Features
 
-- **Decorator-based Routing**: Define your routes with simple and intuitive decorators.
-- **Asynchronous Support**: Full `async`/`await` support for handling requests and events.
-- **Session Management & Authentication**: Secure session handling and user authentication.
-- **WebSocket Support**: Real-time communication with WebSocket routing.
-- **Template Loading**: Easily load and serve HTML templates from a designated directory.
-- **Statics Loading**: Easily load and serve files from designated directory.
-- **Middleware Support**: `before_request` and `after_request` hooks for flexible request handling.
-- **Flexible Error Handling**: Easily handle HTTP errors with use of `error_handler(<http_code:int>)`.
-- **Easy to Use**: Get a server up and running in just a few lines of code.
+-   **Decorator-based Routing**: Define your routes with simple and intuitive decorators.
+-   **Asynchronous Support**: Full `async`/`await` support for handling requests and events.
+-   **Session Management**: Secure session handling using HMAC-signed cookies.
+-   **WebSocket Support**: Integrated `python-socketio` for real-time communication.
+-   **Template Loading**: Easily load and serve HTML templates from a designated directory using Jinja2.
+-   **Statics Loading**: Easily load and serve static files from a designated directory.
+-   **Middleware Support**: Chain middleware for request/response processing, both globally and per-route/group.
+-   **Flexible Error Handling**: Define custom handlers for HTTP errors.
+-   **Easy to Use**: Get a server up and running in just a few lines of code.
 
 ## Installation
 
@@ -26,20 +26,40 @@ Install Nebula from PyPI:
 pip install nebula-core
 ```
 
-or clone and install from GitHub.
+or clone and install from GitHub:
 
 ```bash
 git clone https://github.com/VxidDev/nebula.git
 cd nebula
 pip install .
 ```
-## Usage
 
-Here's a basic example of creating a simple web server with Nebula.
+## Project Structure
 
-**main.py**:
+The Nebula project follows a standard Python project structure:
 
-```py
+-   `.`: Root directory containing configuration files (`.gitignore`, `pyproject.toml`, `README.md`, `LICENSE`).
+-   `build/`, `dist/`, `*.egg-info/`: Build and distribution artifacts.
+-   `examples/`: Example applications demonstrating various Nebula features.
+-   `nebula/`: The core library code.
+    -   `middleware.py`: Defines middleware classes (`BaseMiddleware`, `Middleware`).
+    -   `routing.py`: Handles route definitions (`Route`, `RouteGroup`) and path matching.
+    -   `server.py`: The main ASGI application, request handling, and middleware composition logic.
+    -   `request.py`: Defines the `Request` object and context.
+    -   `response.py`: Defines various `Response` classes (PlainText, HTML, JSON, Redirect).
+    -   `session.py`: Implements session management (`SecureCookieSessionManager`).
+    -   `types.py`: Contains constants like available HTTP methods and default error messages.
+    -   `exceptions.py`: Defines custom exceptions used by the framework.
+    -   `utils/`: Utility functions for templating, static file serving, etc.
+-   `tests/`: Contains unit and integration tests for the framework.
+
+## Usage Examples
+
+### Basic Routing
+
+A simple web server with a root endpoint:
+
+```python
 from nebula import Nebula
 
 app = Nebula()
@@ -52,20 +72,13 @@ if __name__ == "__main__":
     app.run()
 ```
 
-**Run your app**:
-```bash
-python main.py
-```
+## Contributing
 
-Open your browser and navigate to `http://localhost:8000` to see your page.
+Contributions are welcome! 
 
-## Contributions <3
-**amogus-gggy**: 
-- refactoring Nebula 0.2.0.
-- adding websockets support (2.0.0) <br>
-- adding session support <br>
-
-Huge thank you!
+-   **Bug Reports**: Please report bugs in the GitHub Issues section.
+-   **Feature Requests**: Feel free to open an issue to discuss new features.
+-   **Pull Requests**: Fork the repository, create a new branch for your feature or bugfix, and submit a pull request. Please ensure your code follows the project's coding style and includes tests.
 
 ## License
 

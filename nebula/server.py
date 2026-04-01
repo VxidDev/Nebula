@@ -12,6 +12,7 @@ import os
 
 import socketio
 
+from .middleware import Middleware
 from .request import Request
 from .response import Response, PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
 from .routing import Route, RouteGroup
@@ -106,7 +107,12 @@ def auto_detect_response(content, route):
     return PlainTextResponse(str(content))
 
 class Nebula:
-    def __init__(self, host: Optional[str] = "127.0.0.1", port: Optional[int] = 5000, debug: bool = False, import_string: Optional[str] = None, module_name: Optional[str] = None):
+    def __init__(
+        self, host: Optional[str] = "127.0.0.1",
+        port: Optional[int] = 5000, debug: bool = False,
+        import_string: Optional[str] = None, module_name: Optional[str] = None,
+        middlewares: List[Middleware] = None
+    ):
         self.module_name = module_name or get_caller_file()
         self.import_string = import_string
         self.debug = debug
@@ -115,22 +121,19 @@ class Nebula:
         self.port = port
 
         self.routes: List[Route] = []
+        self._middlewares = middlewares or []
 
         self._static_routes: Dict[tuple, Route] = {}
         self._dynamic_routes: List[Route] = []
         self._path_methods: Dict[str, set] = {}
 
         self.templates_dir = DEFAULT_TEMPLATES_DIR
-        self.statics_dir   = DEFAULT_STATICS_DIR
+        self.statics_dir = DEFAULT_STATICS_DIR
 
-        self.NOT_FOUND          = DEFAULT_404_BODY
-        self.INTERNAL_ERROR     = DEFAULT_500_BODY
+        self.NOT_FOUND = DEFAULT_404_BODY
+        self.INTERNAL_ERROR = DEFAULT_500_BODY
         self.METHOD_NOT_ALLOWED = DEFAULT_405_BODY
 
-        self.exec_before_request: Optional[Callable] = None
-        self._before_is_async: bool = False
-        self.exec_after_request: Optional[Callable] = None
-        self._after_is_async: bool = False
 
         # Default error handlers, async flag cached at registration time so
         # inspect.iscoroutinefunction() is never called on the hot path.
@@ -149,7 +152,10 @@ class Nebula:
         self.jinja_env_sync = None
 
         self.sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
-        self.app = socketio.ASGIApp(self.sio, other_asgi_app=self.handle_http)
+
+        self._core = self._build_core()
+        self.app = socketio.ASGIApp(self.sio, other_asgi_app=self._core)
+
         self._socketio_handlers = {}
 
         self._session_manager: Optional[SecureCookieSessionManager] = None
@@ -180,6 +186,31 @@ class Nebula:
                 self._static_routes[(pt, m)] = route
             else:
                 self._dynamic_routes.append(route)
+
+    def _build_core(self):
+        async def app(scope, receive, send):
+            if scope["type"] == "http":
+                request = Request(scope, receive, send)
+                token = _current_request.set(request)
+                try:
+                    return await self.handle_http(scope, receive, send)
+                finally:
+                    _current_request.reset(token)
+
+            elif scope["type"] == "websocket":
+                token = _current_request.set(None) 
+                try:
+                    return await self.app(scope, receive, send)
+                finally:
+                    _current_request.reset(token)
+
+        return app
+
+    def _build_middlewares(self, app: "ASGIApp") -> "ASGIApp":
+        for mw in reversed(self._middlewares):
+            app = mw.build(app)
+
+        return app
 
     def setup_sessions(
         self,
@@ -220,17 +251,7 @@ class Nebula:
         if scope_type == "lifespan":
             return await self.handle_lifespan(receive, send)
 
-        path = scope.get("path", "")
-
-        # Forward all socket.io traffic
-        if path.startswith("/socket.io") or scope_type == "websocket":
-            return await self.app(scope, receive, send)
-
-        # Normal HTTP
-        if scope_type == "http":
-            return await self.handle_http(scope, receive, send)
-
-        self.handle_lifespan(receive, send)
+        return await self.app(scope, receive, send)
 
     async def handle_lifespan(self, receive, send):
         while True:
@@ -245,8 +266,7 @@ class Nebula:
                 return
 
     async def handle_http(self, scope: dict, receive: callable, send: callable):
-        request = Request(scope, receive, send)
-        token = _current_request.set(request) # set context
+        request = get_request()
 
         session = None
         session_mgr = self._session_manager
@@ -308,13 +328,10 @@ class Nebula:
                     return await self._dispatch_error(405, scope, receive, send)
 
                 return await self._dispatch_error(404, scope, receive, send)
-        try:
-            if self.exec_before_request is not None:
-                if self._before_is_async:
-                    await self.exec_before_request(request)
-                else:
-                    self.exec_before_request(request)
-
+        
+        # Middleware application for the route handler
+        async def call_handler(inner_scope, inner_receive, inner_send):
+            # The actual route handler execution
             if route.is_async:
                 if route.accepts_request_arg:
                     response_content = await route.handler(request, **values)
@@ -326,34 +343,36 @@ class Nebula:
                 else:
                     response_content = route.handler(**values)
 
-            if self.exec_after_request is not None:
-                if self._after_is_async:
-                    await self.exec_after_request(request)
+            # Wrap bare return values into Response objects
+            if isinstance(response_content, Response):
+                response = response_content
+            elif route.return_class:
+                if isinstance(response_content, Response):
+                    response = response_content
                 else:
-                    self.exec_after_request(request)
+                    response = route.return_class(response_content)
+            else:
+                response = auto_detect_response(response_content, route)
+
+            # Persist session if dirty
+            if session is not None and session.modified:
+                session_mgr.save_session(session, response)
+            
+            await response(inner_scope, inner_receive, inner_send)
+
+        current_app = call_handler
+        # Apply global middlewares first, then route-specific middlewares
+        # Middlewares are applied in reverse order of how they should execute (outermost first)
+        all_middlewares = self._middlewares + route.middlewares
+        for mw in reversed(all_middlewares):
+            current_app = mw.build(current_app)
+
+        try:
+            return await current_app(scope, receive, send)
 
         except Exception as e:
             print(f"\033[1;31mERROR:\033[1;0m {e}")
             return await self._dispatch_error(500, scope, receive, send)
-        finally:
-            _current_request.reset(token)
-
-        # Wrap bare return values
-        if isinstance(response_content, Response):
-            response = response_content
-        elif route.return_class:
-            if isinstance(response_content, Response):
-                response = response_content
-            else:
-                response = route.return_class(response_content)
-        else:
-            response = auto_detect_response(response_content, route)
-
-        # Persist session if dirty
-        if session is not None and session.modified:
-            session_mgr.save_session(session, response)
-
-        await response(scope, receive, send)
 
     async def _dispatch_error(self, code: int, scope, receive, send):
         handler = self.error_handlers[code]
@@ -363,7 +382,7 @@ class Nebula:
 
         return handler(scope, receive, send)
 
-    def route(self, path: str, methods: List[str] = None, return_class = None) -> Callable:
+    def route(self, path: str, methods: List[str] = None, return_class = None, group_middlewares: List[Middleware] | None = None, route_middlewares: List[Middleware] | None = None) -> Callable:
         def decorator(f: Callable) -> Callable:
             mds = methods or ["GET"]
             is_async = inspect.iscoroutinefunction(f)
@@ -395,6 +414,9 @@ class Nebula:
                 new_route = Route(path, method, f, final_return)
                 new_route.is_async = is_async # cache async flag on the Route object
                 new_route.accepts_request_arg = accepts_request
+
+                # Assign middlewares
+                new_route.middlewares = (group_middlewares or []) + (route_middlewares or [])
 
                 self.routes.append(new_route)
 
@@ -442,25 +464,6 @@ class Nebula:
                 self.routes.append(new_route)
 
             self._rebuild_route_index()
-    #
-    # before_request and after_request will later be replaced with better middleware support. (Classes / Starlette-like)
-    #
-
-    def before_request(self, func: Callable[[Request], Any]) -> Callable[[Request], Any]: 
-        self.exec_before_request = func
-        self._before_is_async    = inspect.iscoroutinefunction(func)
-
-        return func
-
-    def after_request(self, func: Callable[[Request], Any]) -> Callable[[Request], Any]:
-        self.exec_after_request = func
-        self._after_is_async = inspect.iscoroutinefunction(func)
-
-        return func
-
-    #
-    #
-    #
 
     async def internal_error_handler(self, scope: dict, receive: Callable, send: Callable): # basic handler for HTTP 500
         response = HTMLResponse(self.INTERNAL_ERROR, status_code=500)
@@ -536,8 +539,8 @@ class Nebula:
     def set_import_string(self, string: str):
         self.import_string = string
 
-    def group(self, prefix: str) -> RouteGroup:
-        return RouteGroup(self, prefix)
+    def group(self, prefix: str, middlewares: list[Middleware] | None = None) -> RouteGroup:
+        return RouteGroup(self, prefix, middlewares)
 
     def run(self, host: Optional[str] = None , port: Optional[str] = None):
         run_dev(self, host, port)

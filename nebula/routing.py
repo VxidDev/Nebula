@@ -1,6 +1,7 @@
 import re
 from typing import Callable, Dict, Any, List, Optional
 from .response import PlainTextResponse
+from .middleware import Middleware
 
 # Pre-compiled pattern to find {param_name} placeholders.
 # Defined at module level so it is compiled exactly once for the entire process.
@@ -16,7 +17,9 @@ class Route:
         "path_regex",
         "param_names",
         "_is_static",   # True -> no params; match() skips groupdict() allocation
-        "accepts_request_arg",    )
+        "accepts_request_arg",
+        "middlewares", # New: list of Middlewares for this route
+    )
 
     def __init__(self, path: str, method: str, handler: Callable, return_class = None, is_async: bool = False):
         self.path_template = path
@@ -25,6 +28,7 @@ class Route:
         self.return_class = return_class
         self.is_async = is_async
         self.accepts_request_arg = False # Will be set by Nebula.route()
+        self.middlewares: List["Middleware"] = [] # Initialize the new middlewares attribute
 
         self.path_regex, self.param_names = self._compile_path(path)
         self._is_static = len(self.param_names) == 0
@@ -82,21 +86,26 @@ class Route:
         return {} if self._is_static else m.groupdict()
 
 class RouteGroup:
-    def __init__(self, app: "Nebula", prefix: str) -> None:
+    def __init__(self, app: "Nebula", prefix: str, middlewares: list["Middleware"] | None = None) -> None:
         self.app: "Nebula" = app
         self.prefix: str = prefix
+        self._middlewares = middlewares or []
 
-    def get(self, path: str, return_class = None) -> Callable:
-        return self.app.route(f"{self.prefix}{path}", ["GET"], return_class)
+    def middleware(self, middleware: "Middleware") -> "Middleware":
+        self._middlewares.append(middleware)
+        return middleware
+
+    def get(self, path: str, return_class = None, route_middlewares: list["Middleware"] | None = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["GET"], return_class, group_middlewares=self._middlewares, route_middlewares=route_middlewares)
     
-    def post(self, path: str, return_class = None) -> Callable:
-        return self.app.route(f"{self.prefix}{path}", ["POST"], return_class)
+    def post(self, path: str, return_class = None, route_middlewares: list["Middleware"] | None = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["POST"], return_class, group_middlewares=self._middlewares, route_middlewares=route_middlewares)
 
-    def put(self, path: str, return_class = None) -> Callable:
-        return self.app.route(f"{self.prefix}{path}", ["PUT"], return_class)
+    def put(self, path: str, return_class = None, route_middlewares: list["Middleware"] | None = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["PUT"], return_class, group_middlewares=self._middlewares, route_middlewares=route_middlewares)
 
-    def delete(self, path: str, return_class = None) -> Callable:
-        return self.app.route(f"{self.prefix}{path}", ["DELETE"], return_class)
+    def delete(self, path: str, return_class = None, route_middlewares: list["Middleware"] | None = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", ["DELETE"], return_class, group_middlewares=self._middlewares, route_middlewares=route_middlewares)
 
-    def route(self, path: str, methods: List[str] = None, return_class = None) -> Callable:
-        return self.app.route(f"{self.prefix}{path}", methods, return_class)
+    def route(self, path: str, methods: List[str] = None, return_class = None, route_middlewares: list["Middleware"] | None = None) -> Callable:
+        return self.app.route(f"{self.prefix}{path}", methods, return_class, group_middlewares=self._middlewares, route_middlewares=route_middlewares)

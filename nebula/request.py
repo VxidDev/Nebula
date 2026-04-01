@@ -60,6 +60,7 @@ class Request:
         # Set externally by Nebula after session/auth resolution
         "session",
         "user",
+        "state", # New: A dictionary to hold arbitrary request-specific data
     )
 
     def __init__(self, scope: dict, receive: Callable, send: Callable):
@@ -89,6 +90,7 @@ class Request:
 
         self.session = None
         self.user = None
+        self.state: Dict[str, Any] = {} # Initialize state as an empty dictionary
 
     @property
     def url(self) -> str:
