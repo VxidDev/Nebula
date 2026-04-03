@@ -1,4 +1,4 @@
-from .server import Nebula , run_dev, run_prod, get_request, has_request
+from .server import Nebula , run_dev, run_prod, get_request, has_request, request
 from .exceptions import TemplateNotFound, InvalidMethod, DuplicateEndpoint, RouteNotFound
 from .types import AVAILABLE_METHODS
 
@@ -18,5 +18,6 @@ __all__ = [
     "run_prod",
     "SecureCookieSessionManager",
     "get_request",
-    "has_request"
+    "has_request",
+    "request"
 ]

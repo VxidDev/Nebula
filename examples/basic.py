@@ -1,4 +1,4 @@
-from nebula import Nebula
+from nebula import Nebula, request
 from nebula.response import Response, HTMLResponse
 from nebula.exceptions import HTTPException
 
@@ -10,7 +10,7 @@ jinja_template = """
 """
 
 @app.route("/" , methods=["GET" , "POST"])
-async def main(request):
+async def main():
     if request.method == "POST":    
         data = await request.json()
         return {"greet": f"Hi, {data.get('name', 'default')}!"}
@@ -48,7 +48,7 @@ async def error():
     raise HTTPException(500)
 
 @app.post("/api")
-async def api(request):
+async def api():
     json = await request.json()
     return {"a": 1, "b": 2, "c": 3}[json.get("item", "a")] # PlainTextResponse
 
