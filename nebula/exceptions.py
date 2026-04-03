@@ -26,6 +26,10 @@ class InvalidResponseClass(Exception):
     """Raised when the route returns a class/type that does not inherits from Response class."""
     pass
 
+class ExtraArgumentsDetected(Exception):
+    """Raised when arguments that are not score, receive or send are detected."""
+    pass
+
 class HTTPException(Exception):
     """Exception used to trigger HTTP error responses."""
     def __init__(self, status_code: int, body: str = ""):

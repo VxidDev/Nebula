@@ -4,7 +4,7 @@ import json
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, Callable
 
 from nebula.server import Nebula, get_request, has_request
 from nebula.types import DEFAULT_404_BODY
@@ -29,7 +29,7 @@ from nebula.utils.render_template import (
 class ASGIResponse:
     def __init__(self, status_code: int, headers, body: bytes):
         self.status_code = status_code
-        self.headers = {k.decode(): v.decode() for k, v in headers}
+        self.headers = {k.decode().lower(): v.decode() for k, v in headers}
         self.body = body
         self.text = body.decode()
     
@@ -558,3 +558,30 @@ async def test_are_HTTPExceptions_handled_correctly(app, client):
     assert resp.status_code == 404
     assert resp.media_type == "text/html"
     assert resp.body == DEFAULT_404_BODY.encode()
+
+# New test for custom error handler with request object
+@pytest.mark.asyncio
+async def test_custom_error_handler_with_request(app, client):
+    # Define a custom error handler that uses the request object
+    custom_error_message = "Custom Error: Path was {}"
+
+    @app.error_handler(400) # Register for Bad Request
+    async def custom_400_handler(scope: dict, receive: Callable, send: Callable, request: Request):
+        error_path = request.path # Accessing the request object
+        return HTMLResponse(custom_error_message.format(error_path), status_code=400)
+
+    # Define a route that will raise a 400 error
+    @app.route("/trigger_400")
+    async def trigger_400(req: Request):
+        # Simulate a condition that raises a 400 error, e.g., invalid input
+        raise HTTPException(400)
+
+    # Make a request to trigger the 400 error
+    resp = await client.get("/trigger_400")
+
+    # Assertions
+    assert resp.status_code == 400
+    assert custom_error_message.format("/trigger_400").encode() in resp.body
+    assert "Custom Error: Path was /trigger_400" in resp.text
+
+    # Test that default handlers still work if not overridden (implicitly tested by other tests)

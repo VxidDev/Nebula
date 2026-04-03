@@ -39,7 +39,6 @@ pip install .
 The Nebula project follows a standard Python project structure:
 
 -   `.`: Root directory containing configuration files (`.gitignore`, `pyproject.toml`, `README.md`, `LICENSE`).
--   `build/`, `dist/`, `*.egg-info/`: Build and distribution artifacts.
 -   `examples/`: Example applications demonstrating various Nebula features.
 -   `nebula/`: The core library code.
     -   `middleware.py`: Defines middleware classes (`BaseMiddleware`, `Middleware`).

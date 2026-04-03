@@ -31,7 +31,7 @@ from .types import (
     DEFAULT_405_BODY,
 )
 
-from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode, InvalidResponseClass, HTTPException
+from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode, InvalidResponseClass, HTTPException, ExtraArgumentsDetected
 from contextvars import ContextVar
 
 _current_request: ContextVar["Request"] = ContextVar("current_request")
@@ -83,7 +83,7 @@ def is_valid_response_class(obj):
     except TypeError:
         return False
 
-def auto_detect_response(content, route):
+def auto_detect_response(content):
     # JSON (strong signal)
     if isinstance(content, (dict, list)):
         return JSONResponse(content)
@@ -145,6 +145,12 @@ class Nebula:
             404: True,
             405: True,
             500: True,
+        }
+
+        self._error_handler_params: dict[int, set] = {
+            404: {"self", "code"},
+            405: {"self", "code"},
+            500: {"self", "code"},
         }
 
         self.jinja_env = None
@@ -351,7 +357,7 @@ class Nebula:
                 else:
                     response = route.return_class(response_content)
             else:
-                response = auto_detect_response(response_content, route)
+                response = auto_detect_response(response_content)
 
             # Persist session if dirty
             if session is not None and session.modified:
@@ -381,15 +387,42 @@ class Nebula:
             return await self._dispatch_error(status_code, scope, receive, send)
 
     async def _dispatch_error(self, code: int, scope, receive, send):
-        handler = self.error_handlers[code]
+        handler = self.error_handlers.get(code) or self.error_handlers[500]
+        accepted_params = self._error_handler_params.get(code) or self._error_handler_params[500]
 
-        if not handler:
-            handler = self.error_handlers[500]
+        request = None
+        if "request" in accepted_params:
+            request = get_request()
+
+        # Prepare kwargs with all available parameters
+        all_kwargs = {
+            "scope": scope,
+            "receive": receive,
+            "send": send,
+            "code": code, # Error handlers might need the status code
+        }
+        if request:
+            all_kwargs["request"] = request
+
+        filtered_kwargs = {}
+
+        for param_name in accepted_params:
+            if param_name in all_kwargs:
+                filtered_kwargs[param_name] = all_kwargs[param_name]
 
         if self._error_handler_is_async.get(code, True):
-            return await handler(scope, receive, send)
+            result = await handler(**filtered_kwargs)
+        else:
+            result = handler(**filtered_kwargs)
 
-        return handler(scope, receive, send)
+        if isinstance(result, Response):
+            response: Response = result
+        else:
+            response: Response = auto_detect_response(result)
+        
+        response.status_code = code # Set the correct status code
+
+        await response(scope, receive, send)
 
     def route(self, path: str, methods: List[str] = None, return_class = None, group_middlewares: List[Middleware] | None = None, route_middlewares: List[Middleware] | None = None) -> Callable:
         def decorator(f: Callable) -> Callable:
@@ -474,17 +507,14 @@ class Nebula:
 
             self._rebuild_route_index()
 
-    async def internal_error_handler(self, scope: dict, receive: Callable, send: Callable): # basic handler for HTTP 500
-        response = HTMLResponse(self.INTERNAL_ERROR, status_code=500)
-        await response(scope, receive, send)
+    async def internal_error_handler(self, code: int): # basic handler for HTTP 500
+        return HTMLResponse(self.INTERNAL_ERROR, status_code=code)
 
-    async def method_not_allowed_handler(self, scope: dict, receive: Callable, send: Callable): # basic handler for HTTP 405
-        response = HTMLResponse(self.METHOD_NOT_ALLOWED, status_code=405)
-        await response(scope, receive, send)
+    async def method_not_allowed_handler(self, code: int): # basic handler for HTTP 405
+        return HTMLResponse(self.METHOD_NOT_ALLOWED, status_code=code)
 
-    async def content_not_found_handler(self, scope: dict, receive: Callable, send: Callable): # basic handler for HTTP 404
-        response = HTMLResponse(self.NOT_FOUND, status_code=404)
-        await response(scope, receive, send)
+    async def content_not_found_handler(self, code: int): # basic handler for HTTP 404
+        return HTMLResponse(self.NOT_FOUND, status_code=code)
 
     def error_handler(self, http_code: int):
         if not (400 <= http_code <= 599):
@@ -493,8 +523,20 @@ class Nebula:
             )
 
         def wrapper(func: Callable):
+            sig = inspect.signature(func)
+            params = set(sig.parameters.keys())
+
+            allowed = {"scope", "receive", "send", "request", "code"} # Added "request"
+            extra = params - allowed
+
+            if extra:
+                raise ExtraArgumentsDetected(
+                    f"Error handler can only accept {allowed}, got {extra}"
+                )
+
             self.error_handlers[http_code] = func
             self._error_handler_is_async[http_code] = inspect.iscoroutinefunction(func)
+            self._error_handler_params[http_code] = params # Store accepted params
 
             return func
 

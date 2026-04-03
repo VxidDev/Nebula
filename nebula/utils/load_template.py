@@ -2,7 +2,7 @@ from ..exceptions import TemplateNotFound
 
 def load_template(app, filename: str) -> str:
     """
-    Open and read file from ./templates/<filepath>
+    Open and read file from ./<templates_dir>/<filepath>
     """
     try:
         with open(f"{app.templates_dir}/{filename}", "r") as file:
