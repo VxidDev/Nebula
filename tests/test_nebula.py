@@ -22,6 +22,7 @@ from nebula.utils.render_template import (
     _get_template_string, render_template_async, render_template,
     render_template_string_async, render_template_string
 )
+from nebula.cache import cache, cached
 
 
 # ---------- Helper ASGI Test Client ----------
@@ -585,3 +586,123 @@ async def test_custom_error_handler_with_request(app, client):
     assert "Custom Error: Path was /trigger_400" in resp.text
 
     # Test that default handlers still work if not overridden (implicitly tested by other tests)
+
+@pytest.mark.asyncio
+async def test_cached_route_lookup(app, client):
+    # Ensure cache is clear before test
+    cache.clear()
+    assert len(cache._cache) == 0
+
+    @app.route("/cached_user/{user_id}")
+    async def cached_user_route(req: Request, user_id: str):
+        return PlainTextResponse(f"User ID: {user_id}")
+
+    # First request: should populate cache
+    resp1 = await client.get("/cached_user/123")
+    assert resp1.status_code == 200
+    assert resp1.text == "User ID: 123"
+
+    # Check if the cache contains the lookup result for this path/method
+    # The key format is "module:function:instance:arg1:arg2:..."
+    # We need to be flexible about the instance part due to changing memory addresses.
+    expected_module_func_prefix = "nebula.server:_lookup_route"
+    expected_path_part = "/cached_user/123"
+    expected_method_part = "GET"
+
+    found_in_cache = False
+    for key in cache._cache.keys():
+        if key.startswith(expected_module_func_prefix) and \
+           expected_path_part in key and \
+           expected_method_part in key: # This check might be too broad, but will catch the method.
+           # A more precise check would involve parsing the key. For now, this should suffice.
+            found_in_cache = True
+            break
+    assert found_in_cache, "Route lookup result should be in cache after first request"
+    
+    # Second request: should hit cache
+    resp2 = await client.get("/cached_user/123")
+    assert resp2.status_code == 200
+    assert resp2.text == "User ID: 123"
+
+    # Test with a different user_id (new cache entry)
+    resp3 = await client.get("/cached_user/456")
+    assert resp3.status_code == 200
+    assert resp3.text == "User ID: 456"
+
+    expected_path_part_2 = "/cached_user/456"
+    found_in_cache_2 = False
+    for key in cache._cache.keys():
+        if key.startswith(expected_module_func_prefix) and \
+           expected_path_part_2 in key and \
+           expected_method_part in key:
+            found_in_cache_2 = True
+            break
+    assert found_in_cache_2, "Second route lookup result should be in cache"
+
+    # Verify that clearing the cache works
+    cache.clear()
+    assert len(cache._cache) == 0
+
+    # After clearing, a new request should re-populate the cache
+    resp4 = await client.get("/cached_user/789")
+    assert resp4.status_code == 200
+    assert resp4.text == "User ID: 789"
+
+    expected_path_part_3 = "/cached_user/789"
+    found_in_cache_3 = False
+    for key in cache._cache.keys():
+        if key.startswith(expected_module_func_prefix) and \
+           expected_path_part_3 in key and \
+           expected_method_part in key:
+            found_in_cache_3 = True
+            break
+    assert found_in_cache_3, "Cache should be re-populated after clear"
+
+import time
+
+@pytest.mark.asyncio
+async def test_cached_ttl_expiration():
+    cache.clear()
+    
+    call_count_with_ttl = 0
+    @cached(ttl=1)
+    def function_with_ttl():
+        nonlocal call_count_with_ttl
+        call_count_with_ttl += 1
+        return f"Value with TTL {call_count_with_ttl}"
+    
+    # Test with TTL
+    assert function_with_ttl() == "Value with TTL 1"
+    assert function_with_ttl() == "Value with TTL 1" # Should be cached
+
+    # Wait for TTL to expire
+    time.sleep(1.1)
+
+    assert function_with_ttl() == "Value with TTL 2" # Should have expired and re-cached
+    assert function_with_ttl() == "Value with TTL 2" # Should be cached again
+
+    cache.clear()
+
+    call_count_no_ttl = 0
+    @cached(ttl=None)
+    def function_no_ttl():
+        nonlocal call_count_no_ttl
+        call_count_no_ttl += 1
+        return f"Value with no TTL {call_count_no_ttl}"
+    
+    # Test without TTL
+    assert function_no_ttl() == "Value with no TTL 1"
+    assert function_no_ttl() == "Value with no TTL 1" # Should be cached
+
+    # Wait longer than a potential TTL (should not matter)
+    time.sleep(0.5)
+
+    assert function_no_ttl() == "Value with no TTL 1" # Should still be cached (no expiration)
+    
+    # Ensure cache still holds the value even after more time
+    time.sleep(0.7) # Total sleep > 1.1
+    assert function_no_ttl() == "Value with no TTL 1"
+
+
+
+

@@ -21,6 +21,7 @@ from .utils.render_template import (
 )
 
 from .utils import init_template_path, init_template_renderer, init_static_serving, init_template_renderer_sync
+from .cache import cached
 
 from .types import (
     AVAILABLE_METHODS,
@@ -270,6 +271,34 @@ class Nebula:
                 await send({"type": "lifespan.shutdown.complete"})
                 return
 
+    @cached()
+    def _lookup_route(self, path: str, method: str) -> tuple[Optional[Route], Dict[str, Any], bool]:
+        """
+        Lookup a route based on path and method. Caches the result.
+        Returns (route, values, path_matched_wrong_method).
+        """
+        route = None
+        values: Dict[str, Any] = {}
+        path_matched_wrong_method = False
+
+        # O(1) static lookup, covers the vast majority of routes
+        route = self._static_routes.get((path, method))
+
+        if route is None:
+            # Walk dynamic (parameterised) routes
+            for r in self._dynamic_routes:
+                m = r.match(path, method)
+
+                if m is not None:
+                    route = r
+                    values = m
+                    break
+
+                if r.path_regex.match(path):
+                    path_matched_wrong_method = True
+        
+        return route, values, path_matched_wrong_method
+
     async def handle_http(self, scope: dict, receive: callable, send: callable):
         request = get_request()
 
@@ -299,40 +328,22 @@ class Nebula:
 
         path = request.path
         method = request.method
-        route = None
-        values: Dict[str, Any] = {}
 
-        # O(1) static lookup, covers the vast majority of routes
-        route = self._static_routes.get((path, method))
+        route, values, path_matched_wrong_method = self._lookup_route(path, method)
 
         if route is None:
-            # Walk dynamic (parameterised) routes
-            path_matched_wrong_method = False
-
-            for r in self._dynamic_routes:
-                m = r.match(path, method)
-
-                if m is not None:
-                    route = r
-                    values = m
-                    break
-
-                if r.path_regex.match(path):
-                    path_matched_wrong_method = True
-
             # Determine 404 vs 405 when no dynamic route handled it
-            if route is None:
-                if not path_matched_wrong_method:
-                    # Check static routes for wrong-method 405 detection
-                    for (pt, _), r in self._static_routes.items():
-                        if r.path_regex.match(path):
-                            path_matched_wrong_method = True
-                            break
+            if not path_matched_wrong_method:
+                # Check static routes for wrong-method 405 detection
+                for (pt, _), r in self._static_routes.items():
+                    if r.path_regex.match(path):
+                        path_matched_wrong_method = True
+                        break
 
-                if path_matched_wrong_method:
-                    return await self._dispatch_error(405, scope, receive, send)
+            if path_matched_wrong_method:
+                return await self._dispatch_error(405, scope, receive, send)
 
-                return await self._dispatch_error(404, scope, receive, send)
+            return await self._dispatch_error(404, scope, receive, send)
         
         # Middleware application for the route handler
         async def call_handler(inner_scope, inner_receive, inner_send):

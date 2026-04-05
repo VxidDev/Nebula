@@ -171,6 +171,81 @@ if __name__ == "__main__":
     app.run()
 ```
 
+### Caching
+
+Nebula provides a simple in-memory caching mechanism through the `Cache` class and the `@cached` decorator. This can be used to store results of expensive function calls, improving application performance. The cache is a simple dictionary and does not implement advanced eviction policies like LRU.
+
+#### `Cache` Class
+
+The `nebula.cache.cache` object is a global instance of a basic in-memory cache.
+
+*   `cache.get(key)`: Retrieves an item from the cache. Returns `None` if the item is not found or has expired.
+*   `cache.set(key, value, ttl=None)`: Stores an item in the cache. `ttl` (Time-To-Live) is an optional argument in seconds. If `ttl` is `None`, the item will not expire.
+*   `cache.clear()`: Clears all items from the cache.
+*   `cache.delete(key)`: Deletes a specific item from the cache.
+
+#### `@cached` Decorator
+
+The `@cached` decorator can be applied to functions to cache their return values. When a decorated function is called, the decorator first checks if the result for the given arguments is already in the cache. If it is, the cached result is returned immediately. Otherwise, the function is executed, its result is stored in the cache, and then returned.
+
+The cache key is automatically generated based on the function's module, name, and its arguments.
+
+**Arguments:**
+
+*   `ttl` (int, optional): The time-to-live for the cached result, in seconds. If not provided or set to `None`, the cached result will not expire automatically.
+
+**Example Usage:**
+
+```python
+import time
+from nebula import Nebula
+from nebula.cache import cached, cache
+
+app = Nebula()
+
+# Example 1: Caching a function with no TTL (infinite expiration)
+call_count_no_ttl = 0
+@cached()
+def get_some_data_no_ttl(param1: str, param2: int):
+    global call_count_no_ttl
+    call_count_no_ttl += 1
+    print(f"Fetching data (no TTL): {param1}, {param2} - Call {call_count_no_ttl}")
+    return f"Data for {param1}-{param2} (no TTL) - Call {call_count_no_ttl}"
+
+# First call: function executes, result cached
+print(get_some_data_no_ttl("hello", 1))
+# Second call with same arguments: cached result returned
+print(get_some_data_no_ttl("hello", 1))
+# Third call with different arguments: function executes, new result cached
+print(get_some_data_no_ttl("world", 2))
+
+# Example 2: Caching a function with a TTL of 2 seconds
+call_count_with_ttl = 0
+@cached(ttl=2)
+def get_some_data_with_ttl(item_id: int):
+    global call_count_with_ttl
+    call_count_with_ttl += 1
+    print(f"Fetching data (with TTL): {item_id} - Call {call_count_with_ttl}")
+    return f"Data for item {item_id} (with TTL) - Call {call_count_with_ttl}"
+
+# First call: function executes, result cached
+print(get_some_data_with_ttl(100))
+# Second call within TTL: cached result returned
+print(get_some_data_with_ttl(100))
+
+# Wait for TTL to expire
+time.sleep(2.1)
+
+# Third call after TTL: function executes again, new result cached
+print(get_some_data_with_ttl(100))
+print(get_some_data_with_ttl(100)) # Cached again
+
+# Clearing the cache manually
+cache.clear()
+print("\nCache cleared manually.")
+print(get_some_data_no_ttl("hello", 1)) # Function executes again after clear
+```
+
 ### WebSocket Support
 
 Nebula integrates with `python-socketio` for real-time WebSocket communication.

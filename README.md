@@ -41,6 +41,7 @@ The Nebula project follows a standard Python project structure:
 -   `.`: Root directory containing configuration files (`.gitignore`, `pyproject.toml`, `README.md`, `LICENSE`).
 -   `examples/`: Example applications demonstrating various Nebula features.
 -   `nebula/`: The core library code.
+    -   `cache.py`: Defines cache related class and decorator (`@cached`).
     -   `middleware.py`: Defines middleware classes (`BaseMiddleware`, `Middleware`).
     -   `routing.py`: Handles route definitions (`Route`, `RouteGroup`) and path matching.
     -   `server.py`: The main ASGI application, request handling, and middleware composition logic.
