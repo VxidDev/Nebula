@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Dict, Union, Callable
 
 from nebula.server import Nebula, get_request, has_request
+from nebula import current_app # Added current_app import
 from nebula.types import DEFAULT_404_BODY
 from nebula.routing import RouteGroup
 from nebula.request import Request
@@ -702,6 +703,35 @@ async def test_cached_ttl_expiration():
     # Ensure cache still holds the value even after more time
     time.sleep(0.7) # Total sleep > 1.1
     assert function_no_ttl() == "Value with no TTL 1"
+
+@pytest.mark.asyncio
+async def test_current_app_context():
+    app = Nebula(debug=True)
+    
+    # Outside application context, current_app should raise a RuntimeError
+    with pytest.raises(RuntimeError, match="No active app context. Use inside a request or lifespan."):
+        _ = current_app.debug
+
+    # Inside application context, current_app should be the active app
+    with app.test_context():
+        assert current_app.debug is True
+
+
+    # After exiting context, it should again raise RuntimeError
+    with pytest.raises(RuntimeError, match="No active app context. Use inside a request or lifespan."):
+        _ = current_app.debug
+
+@pytest.mark.asyncio
+async def test_current_app_attributes():
+    app = Nebula(debug=False, host="1.2.3.4", port=1234)
+    app.setting_test = "test_value"
+
+    with app.test_context():
+        assert current_app.debug is False
+        assert current_app.host == "1.2.3.4"
+        assert current_app.port == 1234
+        assert current_app.setting_test == "test_value"
+
 
 
 

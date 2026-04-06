@@ -35,10 +35,16 @@ from .types import (
 from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode, InvalidResponseClass, HTTPException, ExtraArgumentsDetected
 from contextvars import ContextVar
 
+from contextlib import contextmanager # Added import
+
 _current_request: ContextVar["Request"] = ContextVar("current_request")
+_current_app: ContextVar["Nebula"] = ContextVar("current_app")
 
 def get_request() -> "Request":
     return _current_request.get()
+
+def get_app() -> "Nebula":
+    return _current_app.get()
 
 class _RequestProxy:
     def __getattr__(self, item):
@@ -49,6 +55,15 @@ class _RequestProxy:
                 "No active request context. Use inside a request handler."
             )
 
+class _AppProxy:
+    def __getattr__(self, item):
+        try:
+            return getattr(get_app(), item)
+        except LookupError:
+            raise RuntimeError(
+                "No active app context. Use inside a request or lifespan."
+            )
+
 def has_request() -> bool:
     try:
         _current_request.get()
@@ -57,6 +72,7 @@ def has_request() -> bool:
         return False
 
 request = _RequestProxy()
+current_app = _AppProxy()
 
 def handler_accepts_request(f):
     sig = inspect.signature(f)
@@ -195,6 +211,8 @@ class Nebula:
 
     def _build_core(self):
         async def app(scope, receive, send):
+            token_app = _current_app.set(self)
+
             if scope["type"] == "http":
                 request = Request(scope, receive, send)
                 token = _current_request.set(request)
@@ -202,6 +220,7 @@ class Nebula:
                     return await self.handle_http(scope, receive, send)
                 finally:
                     _current_request.reset(token)
+                    _current_app.reset(token_app)
 
             elif scope["type"] == "websocket":
                 token = _current_request.set(None) 
@@ -209,6 +228,7 @@ class Nebula:
                     return await self.app(scope, receive, send)
                 finally:
                     _current_request.reset(token)
+                    _current_app.reset(token_app)
 
         return app
 
@@ -603,6 +623,22 @@ class Nebula:
 
     def group(self, prefix: str, middlewares: list[Middleware] | None = None) -> RouteGroup:
         return RouteGroup(self, prefix, middlewares)
+
+    @contextmanager
+    def test_context(self): # Added test_context
+        token = _current_app.set(self)
+        try:
+            yield
+        finally:
+            _current_app.reset(token)
+
+    def make_current(self):
+        """
+        Binds this Nebula instance to the current application context.
+        This makes the app accessible via `current_app` outside of
+        request or lifespan contexts, for example, in CLI scripts or tests.
+        """
+        _current_app.set(self)
 
     def run(self, host: Optional[str] = None , port: Optional[str] = None):
         run_dev(self, host, port)
