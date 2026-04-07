@@ -13,6 +13,7 @@ async def main():
     if request.method == "POST":    
         data = await request.json()
         name = data.get("name", "default")
+        
         return {"greet": f"Hi, {name}!"}
 
     return await app.render_template_async("test.html")
