@@ -127,8 +127,11 @@ class Nebula:
         self, host: Optional[str] = "127.0.0.1",
         port: Optional[int] = 5000, debug: bool = False,
         import_string: Optional[str] = None, module_name: Optional[str] = None,
-        middlewares: List[Middleware] = None
+        middlewares: List[Middleware] = None, make_current: bool = True
     ):
+        if make_current:
+            self.make_current()
+
         self.module_name = module_name or get_caller_file()
         self.import_string = import_string
         self.debug = debug
@@ -265,11 +268,13 @@ class Nebula:
         static_endpoint: str = "static",
         static_dir: Optional[str] = None,
         template_dir: Optional[str] = None,
+        make_current: bool = True
     ):
         init_static_serving(self, static_endpoint, static_dir or self.statics_dir)
         init_template_path(self, template_dir or self.templates_dir)
         init_template_renderer(self)
         init_template_renderer_sync(self)
+        self.make_current()
 
     async def __call__(self, scope, receive, send):
         scope_type = scope["type"]
