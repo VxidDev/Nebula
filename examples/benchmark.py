@@ -7,5 +7,4 @@ async def home():
     return {"test": "test"}
 
 if __name__ == "__main__":
-    # Workers support without any manual configuration!
     run_prod(app, workers=4, access_log=False)
