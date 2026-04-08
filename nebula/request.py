@@ -170,9 +170,25 @@ class Request:
         return (await self.body()).decode("utf-8")
 
     async def json(self) -> Any:
+        if self._json is not None:
+            return self._json
+
         if self._json is None:
             self._json = orjson.loads(await self.body())
+
         return self._json
+
+    def json_sync(self) -> Any:
+        if self._json is not None:
+            return self._json
+            
+        if self._body is not None:
+            self._json = orjson.loads(self._body)
+            return self._json
+
+        raise RuntimeError(
+            "Request body not loaded. Use 'await request.json()' or preload it via middleware."
+        )
 
     async def form(self) -> MultiDict:
         if self._form is None:

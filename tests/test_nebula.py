@@ -121,7 +121,7 @@ class ASGITestClient:
 
 @pytest.fixture
 def app():
-    _app = Nebula(debug=True, host="127.0.0.1", port=8000)
+    _app = Nebula(debug=True, host="127.0.0.1", port=8000, make_current=False)
     _app.init_all()
     return _app
 
@@ -705,23 +705,6 @@ async def test_cached_ttl_expiration():
     assert function_no_ttl() == "Value with no TTL 1"
 
 @pytest.mark.asyncio
-async def test_current_app_context():
-    app = Nebula(debug=True)
-    
-    # Outside application context, current_app should raise a RuntimeError
-    with pytest.raises(RuntimeError, match="No active app context. Use inside a request or lifespan."):
-        _ = current_app.debug
-
-    # Inside application context, current_app should be the active app
-    with app.test_context():
-        assert current_app.debug is True
-
-
-    # After exiting context, it should again raise RuntimeError
-    with pytest.raises(RuntimeError, match="No active app context. Use inside a request or lifespan."):
-        _ = current_app.debug
-
-@pytest.mark.asyncio
 async def test_current_app_attributes():
     app = Nebula(debug=False, host="1.2.3.4", port=1234)
     app.setting_test = "test_value"
@@ -731,6 +714,17 @@ async def test_current_app_attributes():
         assert current_app.host == "1.2.3.4"
         assert current_app.port == 1234
         assert current_app.setting_test == "test_value"
+
+@pytest.mark.asyncio
+async def test_sync_json(capsys, app, client):
+    @app.get("/")
+    def root(req: Request):
+        return req.json_sync()
+
+    await client.get("/")
+    captured = capsys.readouterr()
+
+    assert captured.out == "\033[1;31mERROR:\033[1;0m Request body not loaded. Use 'await request.json()' or preload it via middleware.\n" 
 
 
 

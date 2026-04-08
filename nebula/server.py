@@ -124,8 +124,11 @@ class Nebula:
         self, host: Optional[str] = "127.0.0.1",
         port: Optional[int] = 5000, debug: bool = False,
         import_string: Optional[str] = None, module_name: Optional[str] = None,
-        middlewares: List[Middleware] = None
+        middlewares: List[Middleware] = None, make_current: bool = True, sync_request_support: bool = False
     ):
+        if make_current:
+            self.make_current()
+
         self.module_name = module_name or get_caller_file()
         self.import_string = import_string
         self.debug = debug
@@ -169,6 +172,9 @@ class Nebula:
 
         self.jinja_env = None
         self.jinja_env_sync = None
+
+        if sync_request_support:
+            self._middlewares.append(Middleware(SyncJSONMiddleware))
 
         self.sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
 
@@ -262,11 +268,13 @@ class Nebula:
         static_endpoint: str = "static",
         static_dir: Optional[str] = None,
         template_dir: Optional[str] = None,
+        make_current: bool = True
     ):
         init_static_serving(self, static_endpoint, static_dir or self.statics_dir)
         init_template_path(self, template_dir or self.templates_dir)
         init_template_renderer(self)
         init_template_renderer_sync(self)
+        self.make_current()
 
     async def __call__(self, scope, receive, send):
         scope_type = scope["type"]
@@ -719,3 +727,30 @@ def run_prod(
         log_level=log_level,
         **kwargs
     )
+
+class SyncJSONMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        body = b""
+
+        more_body = True
+        while more_body:
+            message = await receive()
+            if message["type"] == "http.request":
+                body += message.get("body", b"")
+                more_body = message.get("more_body", False)
+
+        # Replace receive so downstream can read body again
+        async def new_receive():
+            return {
+                "type": "http.request",
+                "body": body,
+                "more_body": False,
+            }
+
+        await self.app(scope, new_receive, send)
