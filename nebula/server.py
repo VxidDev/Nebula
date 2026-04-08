@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 
 import uvicorn
 from typing import Dict, List, Callable, Optional, Any

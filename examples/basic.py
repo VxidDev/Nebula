@@ -1,4 +1,3 @@
-import json
 
 from nebula import Nebula, request
 from nebula.exceptions import HTTPException
