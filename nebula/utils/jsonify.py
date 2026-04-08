@@ -3,7 +3,7 @@ import warnings
 
 def jsonify(dictionary: dict, status: int = 200) -> JSONResponse: # deprecated
     warnings.warn(
-        f"jsonify utility is deprecated.",
+        "jsonify utility is deprecated.",
         category=DeprecationWarning,
         stacklevel=2
     )

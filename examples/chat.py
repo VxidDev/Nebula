@@ -1,5 +1,4 @@
 from nebula import Nebula
-from nebula.request import Request
 
 app = Nebula("0.0.0.0", 5000, debug=True)
 app.init_all()

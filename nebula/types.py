@@ -1,5 +1,3 @@
-from typing import Any, Dict
-
 AVAILABLE_METHODS = ["GET", "POST", "PUT", "DELETE"]
 
 DEFAULT_TEMPLATES_DIR = "templates"

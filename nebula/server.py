@@ -1,13 +1,11 @@
 from __future__ import annotations
 
+import os
+
 import uvicorn
 from typing import Dict, List, Callable, Optional, Any
 from pathlib import Path
-import mimetypes
-import datetime
-import ssl
 import inspect
-import os
 
 import socketio
 
@@ -15,7 +13,7 @@ from .middleware import Middleware
 from .request import Request
 from .response import Response, PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
 from .routing import Route, RouteGroup
-from .session import SecureCookieSessionManager, UserMixin, AnonymousUser
+from .session import SecureCookieSessionManager, AnonymousUser
 from .utils.render_template import ( 
     render_template, render_template_async, render_template_string, render_template_string_async 
 )
@@ -32,7 +30,7 @@ from .types import (
     DEFAULT_405_BODY,
 )
 
-from .exceptions import InvalidMethod, TemplateNotFound, DuplicateEndpoint, RouteNotFound, InvalidHTTPErrorCode, InvalidResponseClass, HTTPException, ExtraArgumentsDetected
+from .exceptions import InvalidMethod, DuplicateEndpoint, InvalidHTTPErrorCode, InvalidResponseClass, HTTPException, ExtraArgumentsDetected
 from contextvars import ContextVar
 
 from contextlib import contextmanager # Added import
@@ -307,6 +305,7 @@ class Nebula:
         if route is None:
             # Walk dynamic (parameterised) routes
             for r in self._dynamic_routes:
+                # Try to match with the correct method first
                 m = r.match(path, method)
 
                 if m is not None:
@@ -314,9 +313,31 @@ class Nebula:
                     values = m
                     break
 
-                if r.path_regex.match(path):
-                    path_matched_wrong_method = True
-        
+                # Check if path matches but method is wrong
+                # We need to check if the path pattern matches regardless of method
+                path_parts = path.strip("/").split("/")
+                if len(path_parts) == len(r.pattern_parts):
+                    # Check if all static parts match
+                    path_structure_matches = True
+                    for compiled_item, pattern_part, path_part in zip(
+                        r.compiled_pattern, r.pattern_parts, path_parts
+                    ):
+                        if compiled_item is None and pattern_part != path_part:
+                            path_structure_matches = False
+                            break
+                    
+                    if path_structure_matches:
+                        # Path structure matches, but method is wrong
+                        if r.method != method:
+                            path_matched_wrong_method = True
+                        else:
+                            # Method matches but something else failed - check dynamic params
+                            m = r.match(path, method)
+                            if m is not None:
+                                route = r
+                                values = m
+                                break
+
         return route, values, path_matched_wrong_method
 
     async def handle_http(self, scope: dict, receive: callable, send: callable):
@@ -356,7 +377,7 @@ class Nebula:
             if not path_matched_wrong_method:
                 # Check static routes for wrong-method 405 detection
                 for (pt, _), r in self._static_routes.items():
-                    if r.path_regex.match(path):
+                    if pt == path:
                         path_matched_wrong_method = True
                         break
 
@@ -654,14 +675,26 @@ def run_prod(
     log_level: str = "info",
     **kwargs
 ) -> None:
-    if not app.import_string:
-        raise RuntimeError(
-            "Import string required for production. "
-            "Call: app.set_import_string('app') # 'app' is Nebula instance's name."
-        )
-
     if workers < 1:
         raise ValueError("workers must be >= 1")
+
+    # Auto-detect import string if not explicitly set
+    if not app.import_string:
+        import sys
+        main_module = sys.modules.get("__main__")
+        if (
+            main_module
+            and hasattr(main_module, "__file__")
+            and main_module.__file__
+        ):
+            # Auto-detection only needs to find the variable name (e.g., "app")
+            # The module_name: prefix is added later in app_path construction
+            app.import_string = "app"
+        else:
+            raise RuntimeError(
+                "Cannot auto-detect import string. "
+                "Call: app.set_import_string('app') # 'app' is Nebula instance's name."
+            )
 
     # Resolve module path safely
     module_path = Path(app.module_name).resolve()
@@ -683,7 +716,7 @@ def run_prod(
         port=port or app.port,
         workers=workers,
         app_dir=directory,
-        reload=False, 
+        reload=False,
         log_level=log_level,
         **kwargs
     )
