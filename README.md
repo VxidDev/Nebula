@@ -72,6 +72,26 @@ if __name__ == "__main__":
     app.run()
 ```
 
+### Production Deployment with Multiple Workers
+
+For production use, deploy with multiple workers for better performance and reliability:
+
+```python
+from nebula import Nebula, run_prod
+
+app = Nebula()
+
+@app.get("/")
+async def root():
+    return "<h1>Welcome to Nebula!</h1>"
+
+if __name__ == "__main__":
+    # Import string is auto-detected automatically!
+    run_prod(app, workers=4, host="0.0.0.0", port=8000)
+```
+
+The `run_prod()` function automatically detects the import string, so you don't need to manually configure it. Just specify the number of workers and Nebula will handle the rest!
+
 ## Contributing
 
 Contributions are welcome! 

@@ -275,6 +275,63 @@ if __name__ == "__main__":
     app.run()
 ```
 
+### Production Deployment
+
+For production use, Nebula provides `run_prod()` function with support for multiple worker processes.
+
+#### `run_prod()` Function
+
+The `run_prod()` function automatically detects the import string from the main module, so you don't need to manually configure it.
+
+**Arguments:**
+
+*   `app` (Nebula): The Nebula application instance.
+*   `host` (str, optional): Host to listen on (defaults to app's host).
+*   `port` (int, optional): Port to listen on (defaults to app's port).
+*   `workers` (int): Number of worker processes (default: 1).
+*   `log_level` (str): Logging level (default: "info").
+*   `**kwargs`: Additional arguments passed to uvicorn.
+
+**Example Usage:**
+
+```python
+from nebula import Nebula, run_prod
+
+app = Nebula()
+
+@app.get("/")
+async def home():
+    return "<h1>Hello from production Nebula!</h1>"
+
+@app.get("/api/data")
+async def get_data():
+    return {"message": "This is served by multiple workers!"}
+
+if __name__ == "__main__":
+    # Import string is auto-detected automatically!
+    # Runs 4 worker processes for better performance
+    run_prod(app, workers=4, host="0.0.0.0", port=8000)
+```
+
+**How it works:**
+
+When `workers > 1`, `run_prod()` automatically:
+1. Detects the main module file path
+2. Constructs the appropriate import string (`module_name:app`)
+3. Passes it to uvicorn with the specified number of workers
+
+This eliminates the need to manually call `app.set_import_string()` in most cases.
+
+**Manual Import String (if needed):**
+
+In rare cases where auto-detection fails, you can still set it manually:
+
+```python
+app = Nebula()
+app.set_import_string("my_app")  # If your variable is named 'my_app'
+run_prod(app, workers=4)
+```
+
 ### Error Handling
 
 Define custom error handlers for specific HTTP status codes using the `@app.error_handler()` decorator.

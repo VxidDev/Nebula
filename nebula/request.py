@@ -1,5 +1,5 @@
 import orjson
-from typing import AsyncGenerator, Callable, Dict, Any, List, Optional
+from typing import AsyncGenerator, Callable, Dict, Any, List
 from .exceptions import RequestDisconnected
 
 def _parse_pairs(raw: str) -> "MultiDict":

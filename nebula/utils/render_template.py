@@ -1,4 +1,4 @@
-from jinja2 import Environment , FileSystemLoader , Template
+from jinja2 import Template
 from nebula.response import HTMLResponse
 
 class TemplateRendererError(BaseException):

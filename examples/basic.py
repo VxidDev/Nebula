@@ -1,3 +1,4 @@
+
 from nebula import Nebula, request
 from nebula.exceptions import HTTPException
 
@@ -50,8 +51,9 @@ async def error():
 
 @app.post("/api")
 async def api():
+    body = await request.json()
     data = {"a": 1, "b": 2, "c": 3}
-    return data.get(json.get("item"), data["a"]) # PlainTextResponse
+    return data.get(body.get("item"), data["a"]) # PlainTextResponse
 
 @app.get("/jinja/{mode}")
 async def jinja(mode: str = "file"):

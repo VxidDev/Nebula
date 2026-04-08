@@ -1,6 +1,6 @@
 [project]
 name = "nebula-core"
-version = "3.4.0"
+version = "3.4.1"
 description = "Nebula is a lightweight ASGI-based Python web framework that provides simple, decorator-based routing and middleware support for building fast, asynchronous web applications."
 readme = "README.md"
 license = {text = "MIT"}
@@ -29,3 +29,6 @@ build-backend = "setuptools.build_meta"
 
 [project.urls]
 Homepage = "https://github.com/VxidDev/nebula"
+
+[tool.ruff]
+extend-exclude = ["tests"]

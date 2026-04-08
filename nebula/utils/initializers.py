@@ -14,7 +14,6 @@ def init_static_serving(app, endpoint: str = "static", static_dir: Optional[str]
         resolved_static_dir = Path(app.module_name).resolve().parent / "statics"
     app.statics_dir = resolved_static_dir
         
-    import mimetypes
 
     @app.route(f"/{endpoint}/" + "{path}")
     async def serve_file(request, path):

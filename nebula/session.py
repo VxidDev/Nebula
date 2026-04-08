@@ -2,8 +2,7 @@ import orjson
 import hmac
 import hashlib
 import base64
-from typing import Any, Optional, Callable, Dict, List
-from nebula.request import Request
+from typing import Any, Optional
 from nebula.response import Response
 
 
