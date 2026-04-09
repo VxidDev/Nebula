@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-
 import uvicorn
-from typing import Dict, List, Callable, Optional, Any
+from typing import Any
 from pathlib import Path
 import inspect
 
@@ -121,10 +120,10 @@ def auto_detect_response(content):
 
 class Nebula:
     def __init__(
-        self, host: Optional[str] = "127.0.0.1",
-        port: Optional[int] = 5000, debug: bool = False,
-        import_string: Optional[str] = None, module_name: Optional[str] = None,
-        middlewares: List[Middleware] = None, make_current: bool = True, sync_request_support: bool = False
+        self, host: str | None = "127.0.0.1",
+        port: int | str = 5000, debug: bool = False,
+        import_string: str | None = None, module_name: str | None = None,
+        middlewares: list[Middleware] = None, make_current: bool = True, sync_request_support: bool = False
     ):
         if make_current:
             self.make_current()
@@ -136,12 +135,12 @@ class Nebula:
         self.host = host
         self.port = port
 
-        self.routes: List[Route] = []
+        self.routes: list[Route] = []
         self._middlewares = middlewares or []
 
-        self._static_routes: Dict[tuple, Route] = {}
-        self._dynamic_routes: List[Route] = []
-        self._path_methods: Dict[str, set] = {}
+        self._static_routes: dict[tuple, Route] = {}
+        self._dynamic_routes: list[Route] = []
+        self._path_methods: dict[str, set] = {}
 
         self.templates_dir = DEFAULT_TEMPLATES_DIR
         self.statics_dir = DEFAULT_STATICS_DIR
@@ -153,7 +152,7 @@ class Nebula:
 
         # Default error handlers, async flag cached at registration time so
         # inspect.iscoroutinefunction() is never called on the hot path.
-        self.error_handlers: dict[int, Callable] = {
+        self.error_handlers: dict[int, callable] = {
             404: self.content_not_found_handler,
             405: self.method_not_allowed_handler,
             500: self.internal_error_handler,
@@ -183,8 +182,8 @@ class Nebula:
 
         self._socketio_handlers = {}
 
-        self._session_manager: Optional[SecureCookieSessionManager] = None
-        self._user_loader: Optional[Callable] = None
+        self._session_manager: SecureCookieSessionManager | None = None
+        self._user_loader: callable | None = None
         self._user_loader_is_async: bool = False
 
     @staticmethod
@@ -256,7 +255,7 @@ class Nebula:
             secure=secure,
         )
 
-    def user_loader(self, func: Callable) -> Callable:
+    def user_loader(self, func: callable) -> callable:
         """Register a callback that loads a user object from a stored ID."""
         self._user_loader = func
         self._user_loader_is_async = inspect.iscoroutinefunction(func)
@@ -266,8 +265,8 @@ class Nebula:
     def init_all(
         self,
         static_endpoint: str = "static",
-        static_dir: Optional[str] = None,
-        template_dir: Optional[str] = None,
+        static_dir: str | None = None,
+        template_dir: str | None = None,
         make_current: bool = True
     ):
         init_static_serving(self, static_endpoint, static_dir or self.statics_dir)
@@ -297,13 +296,13 @@ class Nebula:
                 return
 
     @cached()
-    def _lookup_route(self, path: str, method: str) -> tuple[Optional[Route], Dict[str, Any], bool]:
+    def _lookup_route(self, path: str, method: str) -> tuple[Route | None, dict[str, Any], bool]:
         """
         Lookup a route based on path and method. Caches the result.
         Returns (route, values, path_matched_wrong_method).
         """
         route = None
-        values: Dict[str, Any] = {}
+        values: dict[str, Any] = {}
         path_matched_wrong_method = False
 
         # O(1) static lookup, covers the vast majority of routes
@@ -483,8 +482,8 @@ class Nebula:
 
         await response(scope, receive, send)
 
-    def route(self, path: str, methods: List[str] = None, return_class = None, group_middlewares: List[Middleware] | None = None, route_middlewares: List[Middleware] | None = None) -> Callable:
-        def decorator(f: Callable) -> Callable:
+    def route(self, path: str, methods: list[str] = None, return_class = None, group_middlewares: list[Middleware] | None = None, route_middlewares: list[Middleware] | None = None) -> callable:
+        def decorator(f: callable) -> callable:
             mds = methods or ["GET"]
             is_async = inspect.iscoroutinefunction(f)
 
@@ -526,20 +525,20 @@ class Nebula:
 
         return decorator
 
-    def get(self, path: str, return_class = None) -> Callable:
+    def get(self, path: str, return_class = None) -> callable:
         return self.route(path, ["GET"], return_class)
     
-    def post(self, path: str, return_class = None) -> Callable:
+    def post(self, path: str, return_class = None) -> callable:
         return self.route(path, ["POST"], return_class)
 
-    def put(self, path: str, return_class = None) -> Callable:
+    def put(self, path: str, return_class = None) -> callable:
         return self.route(path, ["PUT"], return_class)
 
-    def delete(self, path: str, return_class = None) -> Callable:
+    def delete(self, path: str, return_class = None) -> callable:
         return self.route(path, ["DELETE"], return_class)
 
     def add_url_rule(
-        self, rule: str, endpoint: str = None, view_func: Callable = None, return_class = None, **options
+        self, rule: str, endpoint: str = None, view_func: callable = None, return_class = None, **options
     ):
         methods = options.get("methods", ["GET"])
 
@@ -581,11 +580,11 @@ class Nebula:
                 f"HTTP code {http_code} is not a valid error code (must be 400 - 599)"
             )
 
-        def wrapper(func: Callable):
+        def wrapper(func: callable):
             sig = inspect.signature(func)
             params = set(sig.parameters.keys())
 
-            allowed = {"scope", "receive", "send", "request", "code"} # Added "request"
+            allowed = {"scope", "receive", "send", "request", "code"} 
             extra = params - allowed
 
             if extra:
@@ -613,22 +612,22 @@ class Nebula:
     def render_template_string(self, template_string: str, **kwargs) -> HTMLResponse:
         return render_template_string(self, template_string, **kwargs)
 
-    def on_event(self, event: str) -> Callable:
-        def decorator(f: Callable) -> Callable:
+    def on_event(self, event: str) -> callable:
+        def decorator(f: callable) -> allable:
             self.sio.on(event)(f)
             return f
 
         return decorator
 
-    def on_connect(self) -> Callable:
-        def decorator(f: Callable) -> Callable:
+    def on_connect(self) -> callable:
+        def decorator(f: callable) -> callable:
             self.sio.on("connect")(f)
             return f
 
         return decorator
 
-    def on_disconnect(self) -> Callable:
-        def decorator(f: Callable) -> Callable:
+    def on_disconnect(self) -> callable:
+        def decorator(f: callable) -> callable:
             self.sio.on("disconnect")(f)
             return f
 
@@ -668,16 +667,16 @@ class Nebula:
         """
         _current_app.set(self)
 
-    def run(self, host: Optional[str] = None , port: Optional[str] = None):
+    def run(self, host: str | None = None , port: str | None = None):
         run_dev(self, host, port)
 
-def run_dev(app: Nebula, host: Optional[str] = None, port: Optional[str] = None, **kwargs):
+def run_dev(app: Nebula, host: str | None = None, port: str | None = None, **kwargs):
     uvicorn.run(app, host=host or app.host, port=port or app.port, **kwargs)
 
 def run_prod(
     app: Nebula,
-    host: Optional[str] = None,
-    port: Optional[int] = None,
+    host: str | None = None,
+    port: int | None = None,
     workers: int = 1,
     log_level: str = "info",
     **kwargs
