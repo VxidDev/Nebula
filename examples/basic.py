@@ -2,8 +2,7 @@
 from nebula import Nebula, request
 from nebula.exceptions import HTTPException
 
-app = Nebula()
-app.init_all("statics")
+app = Nebula(init_all=True , static_dir="statics")
 
 jinja_template = """
     <h1>{{ APP.host + ":" + APP.port|string }}</h1>

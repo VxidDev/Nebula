@@ -123,7 +123,8 @@ class Nebula:
         self, host: str | None = "127.0.0.1",
         port: int | str = 5000, debug: bool = False,
         import_string: str | None = None, module_name: str | None = None,
-        middlewares: list[Middleware] = None, make_current: bool = True, sync_request_support: bool = False
+        middlewares: list[Middleware] = None, make_current: bool = True, sync_request_support: bool = False,
+        init_all: bool = False, static_dir: str | None = None, template_dir: str | None = None
     ):
         if make_current:
             self.make_current()
@@ -142,8 +143,8 @@ class Nebula:
         self._dynamic_routes: list[Route] = []
         self._path_methods: dict[str, set] = {}
 
-        self.templates_dir = DEFAULT_TEMPLATES_DIR
-        self.statics_dir = DEFAULT_STATICS_DIR
+        self.templates_dir = DEFAULT_TEMPLATES_DIR or template_dir
+        self.statics_dir = DEFAULT_STATICS_DIR or static_dir
 
         self.NOT_FOUND = DEFAULT_404_BODY
         self.INTERNAL_ERROR = DEFAULT_500_BODY
@@ -185,6 +186,9 @@ class Nebula:
         self._session_manager: SecureCookieSessionManager | None = None
         self._user_loader: callable | None = None
         self._user_loader_is_async: bool = False
+
+        if init_all:
+            self.init_all()
 
     @staticmethod
     def _is_static_path(path_template: str) -> bool:
