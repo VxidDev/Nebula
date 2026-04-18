@@ -1,8 +1,7 @@
-
 from nebula import Nebula, request
 from nebula.exceptions import HTTPException
 
-app = Nebula(init_all=True , static_dir="statics")
+app = Nebula(init_all=True , static_dir="statics", sync_request_support=True)
 
 jinja_template = """
     <h1>{{ APP.host + ":" + APP.port|string }}</h1>
@@ -11,7 +10,7 @@ jinja_template = """
 @app.route("/" , methods=["GET" , "POST"])
 async def main():
     if request.method == "POST":    
-        data = await request.json()
+        data = request.json_sync()
         name = data.get("name", "default")
         
         return {"greet": f"Hi, {name}!"}

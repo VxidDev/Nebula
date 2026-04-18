@@ -79,7 +79,7 @@ class Request:
 
         self.path = scope["path"]
 
-        self._body = None
+        self._body = scope.get("_body")
         self._json = None
         self._form = None
         self._url = None

@@ -121,7 +121,7 @@ class ASGITestClient:
 
 @pytest.fixture
 def app():
-    _app = Nebula(debug=True, host="127.0.0.1", port=8000, make_current=False)
+    _app = Nebula(debug=True, host="127.0.0.1", port=8000, make_current=False, sync_request_support=True)
     _app.init_all()
     return _app
 
@@ -716,15 +716,18 @@ async def test_current_app_attributes():
         assert current_app.setting_test == "test_value"
 
 @pytest.mark.asyncio
-async def test_sync_json(capsys, app, client):
-    @app.get("/")
-    def root(req: Request):
-        return req.json_sync()
+async def test_sync_json(app, client):
+    @app.post("/sync_json_test")
+    def sync_json_test_route(req: Request):
+        data = req.json_sync()
+        return JSONResponse({"received": data, "status": "success"})
 
-    await client.get("/")
-    captured = capsys.readouterr()
+    test_payload = {"key": "value", "number": 123}
+    resp = await client.post("/sync_json_test", json=test_payload)
 
-    assert captured.out == "\033[1;31mERROR:\033[1;0m Request body not loaded. Use 'await request.json()' or preload it via middleware.\n" 
+    assert resp.status_code == 200
+    assert resp.media_type == "application/json"
+    assert resp.json() == {"received": test_payload, "status": "success"} 
 
 
 

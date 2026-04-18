@@ -7,7 +7,7 @@ import inspect
 
 import socketio
 
-from .middleware import Middleware
+from .middleware import Middleware, BaseMiddleware
 from .request import Request
 from .response import Response, PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
 from .routing import Route, RouteGroup
@@ -220,21 +220,26 @@ class Nebula:
             token_app = _current_app.set(self)
 
             if scope["type"] == "http":
-                request = Request(scope, receive, send)
-                token = _current_request.set(request)
+                async def final_app(inner_scope, inner_receive, inner_send):
+                    request = Request(inner_scope, inner_receive, inner_send)
+                    token = _current_request.set(request)
+                    try:
+                        return await self.handle_http(inner_scope, inner_receive, inner_send)
+                    finally:
+                        _current_request.reset(token)
+
+                # Apply middlewares BEFORE request creation
+                current = final_app
+                for mw in reversed(self._middlewares):
+                    current = mw.build(current)
+
                 try:
-                    return await self.handle_http(scope, receive, send)
+                    return await current(scope, receive, send)
                 finally:
-                    _current_request.reset(token)
                     _current_app.reset(token_app)
 
             elif scope["type"] == "websocket":
-                token = _current_request.set(None) 
-                try:
-                    return await self.app(scope, receive, send)
-                finally:
-                    _current_request.reset(token)
-                    _current_app.reset(token_app)
+                return await self.app(scope, receive, send)
 
         return app
 
@@ -731,29 +736,36 @@ def run_prod(
         **kwargs
     )
 
-class SyncJSONMiddleware:
+class SyncJSONMiddleware(BaseMiddleware):
     def __init__(self, app):
-        self.app = app
-
+        super().__init__(app)
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
 
-        body = b""
+        method = scope.get("method", "").upper()
+        
+        # Only attempt to read body for methods that typically have one
+        if method in ["POST", "PUT", "PATCH"]:
+            body = b""
+            more = True
 
-        more_body = True
-        while more_body:
-            message = await receive()
-            if message["type"] == "http.request":
-                body += message.get("body", b"")
-                more_body = message.get("more_body", False)
+            while more:
+                msg = await receive()
+                if msg["type"] == "http.request":
+                    body += msg.get("body", b"")
+                    more = msg.get("more_body", False)
 
-        # Replace receive so downstream can read body again
-        async def new_receive():
-            return {
-                "type": "http.request",
-                "body": body,
-                "more_body": False,
-            }
+            scope["_body"] = body
 
-        await self.app(scope, new_receive, send)
+            async def new_receive():
+                return {
+                    "type": "http.request",
+                    "body": body,
+                    "more_body": False,
+                }
+
+            await self.app(scope, new_receive, send)
+        else:
+            # For methods like GET, HEAD, OPTIONS, etc., just pass through
+            await self.app(scope, receive, send)
